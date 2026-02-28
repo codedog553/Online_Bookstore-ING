@@ -1,0 +1,59 @@
+{
+  "app": {
+    "title": "Online Bookstore",
+    "search": "Search",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout",
+    "cart": "Cart",
+    "myOrders": "My Orders",
+    "adminProducts": "Admin - Products",
+    "adminOrders": "Admin - Orders"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "fullName": "Full Name",
+    "confirm": "Confirm",
+    "toRegister": "Go to Register",
+    "toLogin": "Go to Login"
+  },
+  "product": {
+    "price": "Price",
+    "version": "Version",
+    "paperback": "Paperback",
+    "hardcover": "Hardcover",
+    "addToCart": "Add to Cart",
+    "reviews": "Reviews",
+    "rating": "Rating",
+    "comment": "Comment",
+    "submit": "Submit"
+  },
+  "cart": {
+    "quantity": "Qty",
+    "subtotal": "Subtotal",
+    "total": "Total",
+    "update": "Update",
+    "remove": "Remove",
+    "checkout": "Checkout"
+  },
+  "order": {
+    "address": "Address",
+    "createAddress": "Add Address",
+    "placeOrder": "Place Order",
+    "status": "Status",
+    "createdAt": "Created At",
+    "detail": "Order Detail",
+    "cancel": "Cancel Order",
+    "shippedAt": "Shipped At"
+  },
+  "admin": {
+    "newProduct": "New Product",
+    "title": "Title",
+    "author": "Author",
+    "basePrice": "Base Price",
+    "isActive": "Is Active",
+    "save": "Save",
+    "ship": "Ship"
+  }
+}

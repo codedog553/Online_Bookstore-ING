@@ -1,0 +1,59 @@
+{
+  "app": {
+    "title": "在线书店",
+    "search": "搜索",
+    "login": "登录",
+    "register": "注册",
+    "logout": "退出",
+    "cart": "购物车",
+    "myOrders": "我的订单",
+    "adminProducts": "后台-商品",
+    "adminOrders": "后台-订单"
+  },
+  "auth": {
+    "email": "邮箱",
+    "password": "密码",
+    "fullName": "姓名",
+    "confirm": "确认",
+    "toRegister": "去注册",
+    "toLogin": "去登录"
+  },
+  "product": {
+    "price": "价格",
+    "version": "版本",
+    "paperback": "平装",
+    "hardcover": "精装",
+    "addToCart": "加入购物车",
+    "reviews": "评论",
+    "rating": "评分",
+    "comment": "评论内容",
+    "submit": "提交"
+  },
+  "cart": {
+    "quantity": "数量",
+    "subtotal": "小计",
+    "total": "总计",
+    "update": "更新",
+    "remove": "删除",
+    "checkout": "去结算"
+  },
+  "order": {
+    "address": "收货地址",
+    "createAddress": "新增地址",
+    "placeOrder": "下单",
+    "status": "状态",
+    "createdAt": "下单时间",
+    "detail": "订单详情",
+    "cancel": "取消订单",
+    "shippedAt": "发货时间"
+  },
+  "admin": {
+    "newProduct": "新增商品",
+    "title": "书名",
+    "author": "作者",
+    "basePrice": "基础价格",
+    "isActive": "是否上架",
+    "save": "保存",
+    "ship": "标记发货"
+  }
+}
