@@ -1,24 +1,24 @@
 <template>
   <div>
-    <h2>后台 - 订单管理</h2>
+    <h2>{{ t('admin.ordersTitle') }}</h2>
     <div class="mb16">
-      <el-button @click="load">刷新</el-button>
+      <el-button @click="load">{{ t('order.refresh') }}</el-button>
     </div>
     <el-table :data="list" v-loading="loading" style="width:100%">
-      <el-table-column prop="order_id" label="订单号" width="220" />
-      <el-table-column label="下单时间" width="200">
+      <el-table-column prop="order_id" :label="t('order.orderId')" width="220" />
+      <el-table-column :label="t('order.createdAt')" width="200">
         <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="金额" width="120">
+      <el-table-column :label="t('order.amount')" width="120">
         <template #default="{ row }">￥{{ row.total_amount.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="120" />
-      <el-table-column label="发货时间" width="200">
+      <el-table-column prop="status" :label="t('order.status')" width="120" />
+      <el-table-column :label="t('order.shippedAt')" width="200">
         <template #default="{ row }">{{ row.shipped_at ? formatDate(row.shipped_at) : '-' }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="160">
+      <el-table-column :label="t('admin.operations')" width="160">
         <template #default="{ row }">
-          <el-button type="primary" size="small" :disabled="row.status!=='pending'" @click="ship(row.order_id)">标记发货</el-button>
+          <el-button type="primary" size="small" :disabled="row.status!=='pending'" @click="ship(row.order_id)">{{ t('admin.ship') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -27,11 +27,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import api from '../../api/http'
+import { extractErrorMessage } from '../../api/error'
+import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 
 interface Order { order_id:string; total_amount:number; status:string; shipped_at?:string|null; created_at:string }
 
 const list = ref<Order[]>([])
 const loading = ref(false)
+const { t } = useI18n()
 
 async function load(){
   loading.value = true
@@ -46,7 +50,7 @@ async function ship(orderId: string){
     await api.post(`/api/admin/orders/${orderId}/ship`)
     await load()
   } catch (e:any) {
-    alert(e?.response?.data?.detail || '操作失败（需要管理员登录）')
+    ElMessage.error(extractErrorMessage(e, t('admin.shipFailed')))
   }
 }
 

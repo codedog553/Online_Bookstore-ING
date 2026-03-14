@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
@@ -30,3 +30,26 @@ def init_db():
     # 导入 models 并创建表
     from . import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+
+    # --- 轻量 SQLite 自迁移（无需 Alembic）---
+    # 目的：在不删除现有 app.db 的情况下，允许我们逐步给表加新列。
+    # 说明：只做 ADD COLUMN，不做危险的 drop/rename，以保证学习项目的可用性。
+    with engine.begin() as conn:
+        # products 表新增英文信息列（商品信息仅要求 zh/en）
+        _ensure_column(conn, "products", "title_en", "VARCHAR(200)")
+        _ensure_column(conn, "products", "author_en", "VARCHAR(100)")
+        _ensure_column(conn, "products", "description_en", "TEXT")
+
+
+def _ensure_column(conn, table: str, column: str, ddl_type: str):
+    """若 SQLite 表中不存在 column，则执行 ALTER TABLE ADD COLUMN。
+
+    参数:
+      - ddl_type: 形如 "TEXT" / "VARCHAR(200)" / "INTEGER" ...
+    """
+
+    cols = conn.execute(text(f"PRAGMA table_info({table})")).mappings().all()
+    existing = {c["name"] for c in cols}
+    if column in existing:
+        return
+    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))

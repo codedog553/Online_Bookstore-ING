@@ -1,16 +1,16 @@
 <template>
   <div class="container">
-    <h2>登录</h2>
+    <h2>{{ t('auth.loginTitle') }}</h2>
     <el-form :model="form" label-width="80px" @keyup.enter.native="onSubmit">
-      <el-form-item label="邮箱">
+      <el-form-item :label="t('auth.email')">
         <el-input v-model="form.email" placeholder="email@example.com" />
       </el-form-item>
-      <el-form-item label="密码">
+      <el-form-item :label="t('auth.password')">
         <el-input v-model="form.password" type="password" />
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="onSubmit" :loading="loading">登录</el-button>
-        <router-link to="/register" class="ml8">去注册</router-link>
+        <el-button type="primary" @click="onSubmit" :loading="loading">{{ t('auth.loginTitle') }}</el-button>
+        <router-link to="/register" class="ml8">{{ t('auth.toRegister') }}</router-link>
       </el-form-item>
     </el-form>
   </div>
@@ -19,11 +19,15 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../store/auth'
+import { extractErrorMessage } from '../api/error'
+import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
 const form = reactive({ email: '', password: '' })
+const { t } = useI18n()
 
 async function onSubmit() {
   if (!form.email || !form.password) return
@@ -32,7 +36,7 @@ async function onSubmit() {
     await auth.login(form.email, form.password)
     router.push('/products')
   } catch (e: any) {
-    alert(e?.response?.data?.detail || '登录失败')
+    ElMessage.error(extractErrorMessage(e, t('msg.loginFailed')))
   } finally {
     loading.value = false
   }

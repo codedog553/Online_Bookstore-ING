@@ -1,22 +1,34 @@
 {
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close"
+  },
   "app": {
     "title": "Online Bookstore",
+    "language": "Language",
+    "user": "User",
     "search": "Search",
+    "searchPlaceholder": "Search by title",
     "login": "Login",
     "register": "Register",
     "logout": "Logout",
     "cart": "Cart",
     "myOrders": "My Orders",
     "adminProducts": "Admin - Products",
-    "adminOrders": "Admin - Orders"
+    "adminOrders": "Admin - Orders",
+    "adminReviews": "Admin - Reviews",
+    "adminReports": "Admin - Reports"
   },
   "auth": {
     "email": "Email",
     "password": "Password",
     "fullName": "Full Name",
+    "loginTitle": "Login",
+    "registerTitle": "Register",
     "confirm": "Confirm",
     "toRegister": "Go to Register",
-    "toLogin": "Go to Login"
+    "toLogin": "Go to Login",
+    "passwordHint": "At least 8 characters, includes letters and numbers"
   },
   "product": {
     "price": "Price",
@@ -24,36 +36,132 @@
     "paperback": "Paperback",
     "hardcover": "Hardcover",
     "addToCart": "Add to Cart",
+    "addedToCart": "Added to cart",
+    "selectConfig": "Please select full configuration",
+    "author": "Author",
+    "quantity": "Quantity",
+    "stock": "Stock",
+    "outOfStock": "Out of stock",
+    "select": "Select",
     "reviews": "Reviews",
+    "noReviews": "No reviews",
     "rating": "Rating",
     "comment": "Comment",
     "submit": "Submit"
   },
   "cart": {
+    "title": "Cart",
+    "product": "Product",
+    "config": "Config",
+    "unitPrice": "Unit Price",
     "quantity": "Qty",
     "subtotal": "Subtotal",
     "total": "Total",
     "update": "Update",
     "remove": "Remove",
-    "checkout": "Checkout"
+    "checkout": "Checkout",
+    "updateFailed": "Update failed",
+    "removeFailed": "Remove failed"
   },
   "order": {
-    "address": "Address",
-    "createAddress": "Add Address",
-    "placeOrder": "Place Order",
+    "checkoutTitle": "Checkout",
+    "address": "Shipping address",
+    "receiverName": "Receiver",
+    "phone": "Phone",
+    "province": "Province",
+    "city": "City",
+    "district": "District",
+    "detailAddress": "Detail address",
+    "saveAddress": "Save address",
+    "placeOrder": "Place order",
+    "placeOrderSuccess": "Order placed",
+    "placeOrderFailed": "Place order failed",
+    "orderOverview": "Order overview",
     "status": "Status",
-    "createdAt": "Created At",
-    "detail": "Order Detail",
-    "cancel": "Cancel Order",
-    "shippedAt": "Shipped At"
+    "createdAt": "Created at",
+    "detail": "Order detail",
+    "cancel": "Cancel order",
+    "cancelSuccess": "Order cancelled",
+    "cancelFailed": "Cancel failed",
+    "shippedAt": "Shipped at",
+    "myOrdersTitle": "My orders",
+    "filterStatus": "Filter status",
+    "refresh": "Refresh",
+    "orderId": "Order ID",
+    "amount": "Amount"
+  },
+  "status": {
+    "pending": "Pending",
+    "shipped": "Shipped",
+    "cancelled": "Cancelled",
+    "completed": "Completed"
   },
   "admin": {
-    "newProduct": "New Product",
+    "productsTitle": "Admin - Products",
+    "ordersTitle": "Admin - Orders",
+    "reviewsTitle": "Admin - Reviews",
+    "reportsTitle": "Admin - Reports",
+    "newProduct": "New product",
+    "editProduct": "Edit product",
+    "search": "Search",
+    "keyword": "Keyword",
+    "id": "ID",
     "title": "Title",
+    "titleEn": "Title (EN)",
     "author": "Author",
-    "basePrice": "Base Price",
-    "isActive": "Is Active",
+    "authorEn": "Author (EN)",
+    "basePrice": "Base price",
+    "isActive": "Active",
+    "description": "Description",
+    "descriptionEn": "Description (EN)",
+    "imagesJson": "Images (JSON)",
+    "optionsJson": "Options (JSON)",
     "save": "Save",
-    "ship": "Ship"
+    "ship": "Ship",
+    "shipFailed": "Operation failed (admin required)",
+    "skuManage": "SKU",
+    "manageSku": "Manage SKU",
+    "optionValuesJson": "Option values (JSON)",
+    "priceAdjustment": "Price adjustment",
+    "stockQuantity": "Stock",
+    "available": "Available",
+    "newSku": "New SKU",
+    "addSku": "Add SKU",
+    "operations": "Operations",
+    "delete": "Delete",
+    "visible": "Visible",
+    "hidden": "Hidden",
+    "reportRange": "Date range",
+    "granularity": "Granularity",
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "totalSales": "Total sales",
+    "orderCount": "Orders",
+    "bestSellers": "Best sellers",
+    "salesTrend": "Sales trend"
+    ,"start": "Start"
+    ,"end": "End"
+    ,"all": "All"
+    ,"updated": "Updated"
+    ,"deleted": "Deleted"
+  }
+  ,"msg": {
+    "loginRequired": "Please login first",
+    "loginFailed": "Login failed",
+    "noPermission": "No permission"
+    ,"fillRequired": "Please fill required fields"
+    ,"invalidJson": "Invalid JSON format"
+    ,"noImage": "No image"
+    ,"loading": "Loading..."
+    ,"noText": "(No text)"
+    ,"saveFailed": "Save failed"
+    ,"updateFailed": "Update failed"
+    ,"deleteFailed": "Delete failed"
+    ,"loadFailed": "Load failed"
+    ,"registerFailed": "Register failed"
+    ,"addToCartFailed": "Add to cart failed (login required?)"
+    ,"reviewFailed": "Review failed (purchase required)"
+    ,"saveAddressSuccess": "Address saved"
   }
 }

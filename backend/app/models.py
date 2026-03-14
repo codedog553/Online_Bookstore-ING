@@ -59,11 +59,15 @@ class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
+    # 商品信息国际化：仅要求支持中文(默认)与英文
+    title_en = Column(String(200), nullable=True)
     author = Column(String(100), nullable=True)
+    author_en = Column(String(100), nullable=True)
     base_price = Column(Numeric(10, 2), nullable=False)
     min_price = Column(Numeric(10, 2), nullable=True)
     max_price = Column(Numeric(10, 2), nullable=True)
     description = Column(Text, nullable=True)
+    description_en = Column(Text, nullable=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     images = Column(Text, nullable=True)  # JSON string list

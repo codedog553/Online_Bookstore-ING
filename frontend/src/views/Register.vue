@@ -1,19 +1,20 @@
 <template>
   <div class="container">
-    <h2>注册</h2>
+    <h2>{{ t('auth.registerTitle') }}</h2>
     <el-form :model="form" label-width="80px" @keyup.enter.native="onSubmit">
-      <el-form-item label="姓名">
+      <el-form-item :label="t('auth.fullName')">
         <el-input v-model="form.full_name" />
       </el-form-item>
-      <el-form-item label="邮箱">
+      <el-form-item :label="t('auth.email')">
         <el-input v-model="form.email" placeholder="email@example.com" />
       </el-form-item>
-      <el-form-item label="密码">
-        <el-input v-model="form.password" type="password" />
+      <el-form-item :label="t('auth.password')">
+        <el-input v-model="form.password" type="password" :placeholder="t('auth.passwordHint')" />
+        <div style="color:#888;font-size:12px;margin-top:4px">{{ t('auth.passwordHint') }}</div>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="onSubmit" :loading="loading">注册</el-button>
-        <router-link to="/login" class="ml8">去登录</router-link>
+        <el-button type="primary" @click="onSubmit" :loading="loading">{{ t('auth.registerTitle') }}</el-button>
+        <router-link to="/login" class="ml8">{{ t('auth.toLogin') }}</router-link>
       </el-form-item>
     </el-form>
   </div>
@@ -22,11 +23,15 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../store/auth'
+import { extractErrorMessage } from '../api/error'
+import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
 const form = reactive({ full_name: '', email: '', password: '' })
+const { t } = useI18n()
 
 async function onSubmit() {
   if (!form.full_name || !form.email || !form.password) return
@@ -35,7 +40,7 @@ async function onSubmit() {
     await auth.register(form.full_name, form.email, form.password)
     router.push('/products')
   } catch (e: any) {
-    alert(e?.response?.data?.detail || '注册失败')
+    ElMessage.error(extractErrorMessage(e, t('msg.registerFailed')))
   } finally {
     loading.value = false
   }

@@ -1,34 +1,55 @@
 <template>
   <div>
     <header class="app-header">
-      <router-link to="/products" class="logo">📚 在线书店</router-link>
+      <router-link to="/products" class="logo">📚 {{ t('app.title') }}</router-link>
       <div class="spacer" />
-      <el-input v-model="keyword" placeholder="搜索书名" size="small" style="max-width: 260px" @keyup.enter="doSearch" />
-      <el-button size="small" type="primary" class="ml8" @click="doSearch">搜索</el-button>
+      <el-input
+        v-model="keyword"
+        :placeholder="t('app.searchPlaceholder')"
+        size="small"
+        style="max-width: 260px"
+        @keyup.enter="doSearch"
+      />
+      <el-button size="small" type="primary" class="ml8" @click="doSearch">{{ t('app.search') }}</el-button>
+
+      <el-dropdown class="ml8">
+        <span class="el-dropdown-link">{{ t('app.language') }}: {{ currentLangLabel }}</span>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item @click="setLang('zh')">简体中文</el-dropdown-item>
+            <el-dropdown-item @click="setLang('zh-TW')">繁體中文</el-dropdown-item>
+            <el-dropdown-item @click="setLang('en')">English</el-dropdown-item>
+            <el-dropdown-item @click="setLang('ja')">日本語</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
       <router-link to="/cart" class="ml16">
-        <el-button size="small">购物车</el-button>
+        <el-button size="small">{{ t('app.cart') }}</el-button>
       </router-link>
       <template v-if="isAuthed">
         <el-dropdown class="ml8">
           <span class="el-dropdown-link">
-            {{ user?.full_name || '用户' }}
+            {{ user?.full_name || t('app.user') }}
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item @click="goOrders">我的订单</el-dropdown-item>
-              <el-dropdown-item v-if="user?.is_admin" @click="goAdminProducts">后台-商品</el-dropdown-item>
-              <el-dropdown-item v-if="user?.is_admin" @click="goAdminOrders">后台-订单</el-dropdown-item>
-              <el-dropdown-item divided @click="logout">退出</el-dropdown-item>
+              <el-dropdown-item @click="goOrders">{{ t('app.myOrders') }}</el-dropdown-item>
+              <el-dropdown-item v-if="user?.is_admin" @click="goAdminProducts">{{ t('app.adminProducts') }}</el-dropdown-item>
+              <el-dropdown-item v-if="user?.is_admin" @click="goAdminOrders">{{ t('app.adminOrders') }}</el-dropdown-item>
+              <el-dropdown-item v-if="user?.is_admin" @click="goAdminReviews">{{ t('app.adminReviews') }}</el-dropdown-item>
+              <el-dropdown-item v-if="user?.is_admin" @click="goAdminReports">{{ t('app.adminReports') }}</el-dropdown-item>
+              <el-dropdown-item divided @click="logout">{{ t('app.logout') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
       </template>
       <template v-else>
         <router-link to="/login" class="ml8">
-          <el-button size="small">登录</el-button>
+          <el-button size="small">{{ t('app.login') }}</el-button>
         </router-link>
         <router-link to="/register" class="ml8">
-          <el-button size="small">注册</el-button>
+          <el-button size="small">{{ t('app.register') }}</el-button>
         </router-link>
       </template>
     </header>
@@ -37,7 +58,7 @@
       <router-view />
     </main>
 
-    <footer class="app-footer">© 2026 在线书店 Demo</footer>
+    <footer class="app-footer">© 2026 {{ t('app.title') }} Demo</footer>
   </div>
 </template>
 
@@ -45,10 +66,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from './store/auth'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const auth = useAuthStore()
 const keyword = ref('')
+const { t, locale } = useI18n()
 
 const isAuthed = computed(() => !!auth.token)
 const user = computed(() => auth.user)
@@ -64,9 +87,27 @@ function logout() {
 function goOrders() { router.push('/orders') }
 function goAdminProducts() { router.push('/admin/products') }
 function goAdminOrders() { router.push('/admin/orders') }
+function goAdminReviews() { router.push('/admin/reviews') }
+function goAdminReports() { router.push('/admin/reports') }
+
+const currentLangLabel = computed(() => {
+  const l = String(locale.value)
+  if (l === 'zh') return '简中'
+  if (l === 'zh-TW') return '繁中'
+  if (l === 'en') return 'EN'
+  if (l === 'ja') return '日本語'
+  return l
+})
+
+function setLang(l: 'zh' | 'zh-TW' | 'en' | 'ja') {
+  locale.value = l
+  localStorage.setItem('lang', l)
+  document.documentElement.lang = l
+}
 
 onMounted(() => {
   auth.tryRestore()
+  document.documentElement.lang = String(locale.value)
 })
 </script>
 

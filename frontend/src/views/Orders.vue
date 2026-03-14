@@ -1,35 +1,36 @@
 <template>
   <div>
-    <h2>我的订单</h2>
+    <h2>{{ t('order.myOrdersTitle') }}</h2>
     <div class="mb16">
-      <el-select v-model="status" placeholder="筛选状态" clearable style="width:160px">
-        <el-option label="全部" value="" />
-        <el-option label="待处理" value="pending" />
-        <el-option label="已发货" value="shipped" />
-        <el-option label="已取消" value="cancelled" />
-        <el-option label="已完成" value="completed" />
+      <el-select v-model="status" :placeholder="t('order.filterStatus')" clearable style="width:160px">
+        <el-option :label="t('admin.all')" value="" />
+        <el-option :label="t('status.pending')" value="pending" />
+        <el-option :label="t('status.shipped')" value="shipped" />
+        <el-option :label="t('status.cancelled')" value="cancelled" />
+        <el-option :label="t('status.completed')" value="completed" />
       </el-select>
-      <el-button class="ml8" @click="load">刷新</el-button>
+      <el-button class="ml8" @click="load">{{ t('order.refresh') }}</el-button>
     </div>
     <el-table :data="filtered" v-loading="loading">
-      <el-table-column prop="order_id" label="订单号" width="200">
+      <el-table-column prop="order_id" :label="t('order.orderId')" width="200">
         <template #default="{ row }">
           <router-link :to="`/orders/${row.order_id}`">{{ row.order_id }}</router-link>
         </template>
       </el-table-column>
-      <el-table-column label="下单时间" width="200">
+      <el-table-column :label="t('order.createdAt')" width="200">
         <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="金额" width="120">
+      <el-table-column :label="t('order.amount')" width="120">
         <template #default="{ row }">￥{{ row.total_amount.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" />
+      <el-table-column prop="status" :label="t('order.status')" />
     </el-table>
   </div>
 </template>
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import api from '../api/http'
+import { useI18n } from 'vue-i18n'
 
 interface OrderItem { sku_id:number; quantity:number; unit_price:number; option_values:string }
 interface Order { order_id:string; total_amount:number; status:string; shipped_at?:string|null; created_at:string; items:OrderItem[] }
@@ -37,6 +38,7 @@ interface Order { order_id:string; total_amount:number; status:string; shipped_a
 const list = ref<Order[]>([])
 const loading = ref(false)
 const status = ref<string>('')
+const { t } = useI18n()
 
 async function load(){
   loading.value = true

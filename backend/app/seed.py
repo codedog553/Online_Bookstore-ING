@@ -14,6 +14,7 @@ from .db import SessionLocal, init_db
 from . import models
 from .auth import get_password_hash
 import json
+from typing import Optional
 
 
 def reset_all(db: Session):
@@ -62,12 +63,26 @@ def create_categories(db: Session):
     return cat1, cat2
 
 
-def create_product_with_skus(db: Session, title: str, author: str, base_price: float, category_id: int, images: list[str]):
+def create_product_with_skus(
+    db: Session,
+    title: str,
+    author: str,
+    base_price: float,
+    category_id: int,
+    images: list[str],
+    *,
+    title_en: Optional[str] = None,
+    author_en: Optional[str] = None,
+    description_en: Optional[str] = None,
+):
     prod = models.Product(
         title=title,
+        title_en=title_en or title,
         author=author,
+        author_en=author_en or author,
         base_price=base_price,
         description=f"《{title}》简介……",
+        description_en=description_en or f"Introduction of {title}...",
         category_id=category_id,
         is_active=True,
         images=json.dumps(images, ensure_ascii=False),
@@ -176,8 +191,28 @@ def main():
             "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800",
             "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800",
         ]
-        p1 = create_product_with_skus(db, "哈利波特与魔法石", "J.K.罗琳", 49.0, cat1.id, imgs1)
-        p2 = create_product_with_skus(db, "深入浅出计算机", "张三", 59.0, cat2.id, imgs2)
+        p1 = create_product_with_skus(
+            db,
+            "哈利波特与魔法石",
+            "J.K.罗琳",
+            49.0,
+            cat1.id,
+            imgs1,
+            title_en="Harry Potter and the Philosopher's Stone",
+            author_en="J.K. Rowling",
+            description_en="The first book in the Harry Potter series.",
+        )
+        p2 = create_product_with_skus(
+            db,
+            "深入浅出计算机",
+            "张三",
+            59.0,
+            cat2.id,
+            imgs2,
+            title_en="Computer Science Made Easy",
+            author_en="Zhang San",
+            description_en="An easy-to-understand introduction to computer science.",
+        )
         create_demo_order_and_review(db, user, p1)
         print("Seed completed. Admin: admin@demo.com / Admin1234, User: user@demo.com / User1234")
     finally:

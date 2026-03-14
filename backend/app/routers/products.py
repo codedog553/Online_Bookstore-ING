@@ -1,6 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
 
 from .. import models, schemas
 from ..db import get_db
@@ -8,7 +9,7 @@ from ..db import get_db
 router = APIRouter(prefix="/api/products", tags=["products"])
 
 
-@router.get("", response_model=List[schemas.ProductOut])
+@router.get("", response_model=schemas.PagedProductsOut)
 def list_products(
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
@@ -21,9 +22,11 @@ def list_products(
         q = q.filter(models.Product.category_id == category)
     if keyword:
         like = f"%{keyword}%"
-        q = q.filter(models.Product.title.like(like))
+        q = q.filter(or_(models.Product.title.like(like), models.Product.title_en.like(like)))
+
+    total = q.with_entities(func.count(models.Product.id)).scalar() or 0
     items = q.order_by(models.Product.created_at.desc()).offset((page - 1) * size).limit(size).all()
-    return items
+    return schemas.PagedProductsOut(items=items, total=int(total), page=page, size=size)
 
 
 @router.get("/{product_id}", response_model=schemas.ProductDetail)
@@ -41,7 +44,7 @@ def search_products(q: str, db: Session = Depends(get_db)):
     items = (
         db.query(models.Product)
         .filter(models.Product.is_active == True)  # noqa: E712
-        .filter(models.Product.title.like(like))
+        .filter(or_(models.Product.title.like(like), models.Product.title_en.like(like)))
         .order_by(models.Product.created_at.desc())
         .all()
     )
