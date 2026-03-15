@@ -13,7 +13,7 @@
       <el-col v-for="p in products" :key="p.id" :span="6" class="mb16">
         <el-card shadow="hover" @click="goDetail(p.id)" style="cursor:pointer">
           <img
-            :src="firstImage(p.images)"
+            :src="productThumb(p)"
             :alt="pickText(p.title, p.title_en)"
             style="width:100%;height:160px;object-fit:cover"
           />
@@ -38,6 +38,8 @@ import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api/http'
 import { useI18n } from 'vue-i18n'
+import { pickProductText } from '../utils/productI18n'
+import { resolveBackendUrl } from '../utils/resolveUrl'
 
 interface Product {
   id:number
@@ -47,7 +49,7 @@ interface Product {
   author_en?: string | null
   base_price:number
   min_price?:number|null
-  images?:string|null
+  thumbnail_url?: string | null
 }
 
 const route = useRoute();
@@ -61,14 +63,12 @@ const keyword = ref<string>((route.query.keyword as string) || '')
 const { locale, t } = useI18n()
 
 function pickText(zh?: string | null, en?: string | null) {
-  const l = String(locale.value)
-  // 商品信息规则：仅英文显示英文，其余语言回退中文
-  if (l === 'en') return (en || zh || '')
-  return (zh || en || '')
+  return pickProductText(zh, en, String(locale.value))
 }
 
-function firstImage(images?: string | null) {
-  try { if (images){ const arr = JSON.parse(images); if (Array.isArray(arr) && arr.length>0) return arr[0]; } } catch {}
+function productThumb(p: Product) {
+  // A3/B1: prefer backend computed thumbnail_url (supports SKU photos fallback)
+  if (p.thumbnail_url) return resolveBackendUrl(p.thumbnail_url)
   return 'https://via.placeholder.com/400x240?text=No+Image'
 }
 

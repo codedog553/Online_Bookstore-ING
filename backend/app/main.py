@@ -1,5 +1,8 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .db import init_db
 from .routers import auth as auth_router
@@ -12,6 +15,11 @@ from .routers import addresses as addresses_router
 from .routers import admin as admin_router
 
 app = FastAPI(title="Online Bookstore API", version="1.0")
+
+# 静态文件：本地上传的商品图片（B1/A16）
+UPLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 # 开发环境 CORS（前端默认 5173）
 origins = [

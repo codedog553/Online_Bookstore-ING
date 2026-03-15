@@ -21,16 +21,20 @@
         <el-form-item :label="t('admin.titleEn')"><el-input v-model="form.title_en" /></el-form-item>
         <el-form-item :label="t('product.author')"><el-input v-model="form.author" /></el-form-item>
         <el-form-item :label="t('admin.authorEn')"><el-input v-model="form.author_en" /></el-form-item>
+        <el-form-item :label="t('product.publisher')"><el-input v-model="form.publisher" /></el-form-item>
+        <el-form-item :label="t('product.publisherEn')"><el-input v-model="form.publisher_en" /></el-form-item>
         <el-form-item :label="t('admin.basePrice')"><el-input v-model.number="form.base_price" type="number" /></el-form-item>
         <el-form-item :label="t('admin.description')"><el-input type="textarea" v-model="form.description" /></el-form-item>
         <el-form-item :label="t('admin.descriptionEn')"><el-input type="textarea" v-model="form.description_en" /></el-form-item>
-        <el-form-item :label="t('admin.imagesJson')">
-          <el-input type="textarea" v-model="form.images" placeholder='例如 ["https://...","https://..."]' />
-        </el-form-item>
         <el-form-item :label="t('admin.optionsJson')">
-          <el-input type="textarea" v-model="form.options" placeholder='例如 {"版本":["平装","精装"], "optionImages": {"版本": {"平装":"https://..."}}}' />
+          <el-input type="textarea" v-model="form.options" :placeholder="t('admin.optionsJsonHint')" />
         </el-form-item>
         <el-form-item :label="t('admin.isActive')"><el-switch v-model="form.is_active" /></el-form-item>
+        <el-form-item>
+          <div style="color:#888;line-height:1.4">
+            {{ t('admin.skuPhotos') }}：{{ t('admin.selectSkuTip') }}
+          </div>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="create">{{ t('admin.save') }}</el-button>
         </el-form-item>
@@ -64,15 +68,11 @@
         <el-form-item :label="t('admin.titleEn')"><el-input v-model="editForm.title_en" /></el-form-item>
         <el-form-item :label="t('product.author')"><el-input v-model="editForm.author" /></el-form-item>
         <el-form-item :label="t('admin.authorEn')"><el-input v-model="editForm.author_en" /></el-form-item>
+        <el-form-item :label="t('product.publisher')"><el-input v-model="editForm.publisher" /></el-form-item>
+        <el-form-item :label="t('product.publisherEn')"><el-input v-model="editForm.publisher_en" /></el-form-item>
         <el-form-item :label="t('admin.basePrice')"><el-input v-model.number="editForm.base_price" type="number" /></el-form-item>
         <el-form-item :label="t('admin.description')"><el-input type="textarea" v-model="editForm.description" /></el-form-item>
         <el-form-item :label="t('admin.descriptionEn')"><el-input type="textarea" v-model="editForm.description_en" /></el-form-item>
-        <el-form-item :label="t('admin.imagesJson')">
-          <el-input type="textarea" v-model="editForm.images" />
-          <div style="margin-top:6px;display:flex;gap:8px;align-items:center" v-if="firstImageUrl(editForm.images)">
-            <el-image :src="firstImageUrl(editForm.images)" style="width:80px;height:80px" fit="cover" />
-          </div>
-        </el-form-item>
         <el-form-item :label="t('admin.optionsJson')"><el-input type="textarea" v-model="editForm.options" /></el-form-item>
         <el-form-item :label="t('admin.isActive')"><el-switch v-model="editForm.is_active" /></el-form-item>
       </el-form>
@@ -82,9 +82,9 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="skuDialogVisible" width="860px" :title="`${t('admin.manageSku')} - #${currentProduct?.id} ${currentProduct?.title}`">
+    <el-dialog v-model="skuDialogVisible" width="900px" :title="`${t('admin.manageSku')} - #${currentProduct?.id} ${currentProduct?.title}`">
       <div v-if="currentProduct">
-        <el-table :data="skus" size="small" style="width:100%" class="mb16">
+        <el-table :data="skus" size="small" style="width:100%" class="mb16" @row-click="(row:any) => (selectedSku = row)">
           <el-table-column :label="t('cart.config')">
             <template #default="{ row }">{{ parseOption(row.option_values) }}</template>
           </el-table-column>
@@ -110,10 +110,42 @@
           </el-table-column>
         </el-table>
 
+        <el-card class="mb16">
+          <template #header>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span>{{ t('admin.skuPhotos') }}</span>
+              <span style="color:#888" v-if="selectedSku">#{{ selectedSku.id }} ({{ parseOption(selectedSku.option_values) }})</span>
+            </div>
+          </template>
+
+          <div v-if="!selectedSku" style="color:#888">{{ t('admin.selectSkuTip') }}</div>
+
+          <div v-else>
+            <el-upload
+              multiple
+              :show-file-list="false"
+              :http-request="uploadSkuPhotos"
+              :disabled="uploadingPhotos"
+            >
+              <el-button type="primary" :loading="uploadingPhotos">{{ t('admin.uploadSkuPhotos') }}</el-button>
+            </el-upload>
+
+            <div class="photoGrid" v-if="parsePhotos(selectedSku.photos).length">
+              <div v-for="p in parsePhotos(selectedSku.photos)" :key="p" class="photoItem">
+                <el-image :src="p" style="width:96px;height:96px" fit="cover" />
+                <div style="margin-top:6px;display:flex;justify-content:center">
+                  <el-button size="small" type="danger" @click="deletePhoto(p)">{{ t('admin.delete') }}</el-button>
+                </div>
+              </div>
+            </div>
+            <div v-else style="color:#888;margin-top:10px">{{ t('admin.noPhotos') }}</div>
+          </div>
+        </el-card>
+
         <h4>{{ t('admin.newSku') }}</h4>
         <el-form :model="newSku" label-width="120px">
           <el-form-item :label="t('admin.optionValuesJson')">
-            <el-input type="textarea" v-model="newSku.option_values" placeholder='例如 {"version":"标准"}' />
+            <el-input type="textarea" v-model="newSku.option_values" :placeholder="t('admin.optionValuesJsonHint')" />
           </el-form-item>
           <el-form-item :label="t('admin.priceAdjustment')">
             <el-input v-model.number="newSku.price_adjustment" type="number" />
@@ -145,15 +177,16 @@ interface Product {
   title_en?: string | null
   author?:string | null
   author_en?: string | null
+  publisher?: string | null
+  publisher_en?: string | null
   base_price:number
   min_price?:number|null
   is_active:boolean
   description?:string|null
   description_en?: string | null
-  images?:string|null
   options?:string|null
 }
-interface SKU { id:number; product_id:number; option_values:string; price_adjustment:number; stock_quantity:number; is_available:boolean }
+interface SKU { id:number; product_id:number; option_values:string; price_adjustment:number; stock_quantity:number; is_available:boolean; photos?: string | null }
 
 const { t } = useI18n()
 
@@ -167,11 +200,12 @@ const form = ref({
   title_en:'',
   author:'',
   author_en:'',
+  publisher:'',
+  publisher_en:'',
   base_price: 0,
   is_active: true,
   description:'',
   description_en:'',
-  images:'',
   options:''
 })
 
@@ -182,8 +216,22 @@ const editForm = ref<any | null>(null)
 const skuDialogVisible = ref(false)
 const currentProduct = ref<Product | null>(null)
 const skus = ref<SKU[]>([])
+const selectedSku = ref<SKU | null>(null)
 const savingSku = ref(false)
 const newSku = ref({ option_values: '{}', price_adjustment: 0, stock_quantity: 0, is_available: true })
+
+const uploadingPhotos = ref(false)
+
+function parsePhotos(s: any): string[] {
+  const v = (s ?? '').toString().trim()
+  if (!v) return []
+  try {
+    const arr = JSON.parse(v)
+    return Array.isArray(arr) ? arr.map((x) => String(x)) : []
+  } catch {
+    return []
+  }
+}
 
 async function load(){
   loading.value = true
@@ -194,19 +242,25 @@ async function load(){
 }
 
 async function create(){
-  if (!form.value.title || !form.value.base_price) {
+  if (!form.value.title || !form.value.base_price || !form.value.title_en) {
     ElMessage.warning(t('msg.fillRequired'))
     return
   }
 
-  if (!safeJsonOrEmpty(form.value.images) || !safeJsonOrEmpty(form.value.options)) {
+  // W2: 新建商品要求中英双语字段
+  if (!form.value.author || !form.value.author_en || !form.value.publisher || !form.value.publisher_en || !form.value.description || !form.value.description_en) {
+    ElMessage.warning(t('msg.fillRequired'))
+    return
+  }
+
+  if (!safeJsonOrEmpty(form.value.options)) {
     ElMessage.warning(t('msg.invalidJson'))
     return
   }
   saving.value = true
   try {
     await api.post('/api/admin/products', form.value)
-    form.value = { title:'', title_en:'', author:'', author_en:'', base_price: 0, is_active: true, description:'', description_en:'', images:'', options:'' }
+    form.value = { title:'', title_en:'', author:'', author_en:'', publisher:'', publisher_en:'', base_price: 0, is_active: true, description:'', description_en:'', options:'' }
     await load()
   } catch(e:any){
     ElMessage.error(extractErrorMessage(e, t('msg.saveFailed')))
@@ -229,6 +283,7 @@ async function openSkuDialog(p: Product){
   currentProduct.value = p
   skuDialogVisible.value = true
   await fetchSkus()
+  selectedSku.value = skus.value?.[0] || null
 }
 
 async function fetchSkus(){
@@ -236,6 +291,10 @@ async function fetchSkus(){
   try {
     const { data } = await api.get(`/api/admin/products/${currentProduct.value.id}/skus`)
     skus.value = data
+    if (selectedSku.value) {
+      const found = skus.value.find((x) => x.id === selectedSku.value?.id)
+      selectedSku.value = found || skus.value?.[0] || null
+    }
   } catch(e:any){
     ElMessage.error(extractErrorMessage(e, t('msg.loadFailed')))
   }
@@ -258,6 +317,37 @@ async function saveSku(row: SKU){
 async function delSku(row: SKU){
   try {
     await api.delete(`/api/admin/skus/${row.id}`)
+    await fetchSkus()
+  } catch(e:any){
+    ElMessage.error(extractErrorMessage(e, t('msg.deleteFailed')))
+  }
+}
+
+async function uploadSkuPhotos(file: any){
+  // ElementPlus http-request hook
+  if (!selectedSku.value) return
+  uploadingPhotos.value = true
+  try {
+    const form = new FormData()
+    // 后端参数名为 files: List[UploadFile]
+    form.append('files', file.file)
+    await api.post(`/api/admin/skus/${selectedSku.value.id}/photos`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    ElMessage.success(t('admin.uploadSuccess'))
+    await fetchSkus()
+  } catch(e:any) {
+    ElMessage.error(extractErrorMessage(e, t('admin.uploadFailed')))
+  } finally {
+    uploadingPhotos.value = false
+  }
+}
+
+async function deletePhoto(path: string){
+  if (!selectedSku.value) return
+  try {
+    await api.delete(`/api/admin/skus/${selectedSku.value.id}/photos`, { params: { path } })
+    ElMessage.success(t('admin.deleteSuccess'))
     await fetchSkus()
   } catch(e:any){
     ElMessage.error(extractErrorMessage(e, t('msg.deleteFailed')))
@@ -288,16 +378,6 @@ function safeJsonOrEmpty(s: any): boolean {
   try { JSON.parse(v); return true } catch { return false }
 }
 
-function firstImageUrl(s: any): string {
-  const v = (s ?? '').toString().trim()
-  if (!v) return ''
-  try {
-    const arr = JSON.parse(v)
-    if (Array.isArray(arr) && arr.length) return String(arr[0] || '')
-    return ''
-  } catch { return '' }
-}
-
 function openEdit(p: Product) {
   editForm.value = JSON.parse(JSON.stringify(p))
   editVisible.value = true
@@ -305,11 +385,16 @@ function openEdit(p: Product) {
 
 async function saveEdit() {
   if (!editForm.value) return
-  if (!editForm.value.title || !editForm.value.base_price) {
+  if (!editForm.value.title || !editForm.value.base_price || !editForm.value.title_en) {
     ElMessage.warning(t('msg.fillRequired'))
     return
   }
-  if (!safeJsonOrEmpty(editForm.value.images) || !safeJsonOrEmpty(editForm.value.options)) {
+
+  if (!editForm.value.author || !editForm.value.author_en || !editForm.value.publisher || !editForm.value.publisher_en || !editForm.value.description || !editForm.value.description_en) {
+    ElMessage.warning(t('msg.fillRequired'))
+    return
+  }
+  if (!safeJsonOrEmpty(editForm.value.options)) {
     ElMessage.warning(t('msg.invalidJson'))
     return
   }
@@ -320,10 +405,11 @@ async function saveEdit() {
       title_en: editForm.value.title_en,
       author: editForm.value.author,
       author_en: editForm.value.author_en,
+      publisher: editForm.value.publisher,
+      publisher_en: editForm.value.publisher_en,
       base_price: editForm.value.base_price,
       description: editForm.value.description,
       description_en: editForm.value.description_en,
-      images: editForm.value.images,
       options: editForm.value.options,
       is_active: editForm.value.is_active,
     })
@@ -341,4 +427,6 @@ onMounted(load)
 </script>
 <style scoped>
 .mb16{ margin-bottom:16px }
+.photoGrid{ margin-top:12px; display:flex; flex-wrap:wrap; gap:12px }
+.photoItem{ width:110px }
 </style>

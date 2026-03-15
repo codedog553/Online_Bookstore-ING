@@ -22,8 +22,20 @@ export const useAuthStore = defineStore('auth', {
       localStorage.setItem('token', this.token)
       await this.fetchMe()
     },
-    async register(full_name: string, email: string, password: string) {
-      const { data } = await api.post('/api/auth/register', { full_name, email, password })
+    async register(
+      full_name: string,
+      email: string,
+      password: string,
+      shipping_address: {
+        receiver_name: string
+        phone?: string
+        province: string
+        city: string
+        district: string
+        detail_address: string
+      }
+    ) {
+      const { data } = await api.post('/api/auth/register', { full_name, email, password, shipping_address })
       this.token = data.access_token
       localStorage.setItem('token', this.token)
       await this.fetchMe()

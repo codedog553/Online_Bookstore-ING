@@ -2,15 +2,15 @@
   <div v-if="product">
     <el-row :gutter="20">
       <el-col :span="10">
-        <div v-if="selectedImageUrl" class="main-image">
-          <img :src="selectedImageUrl" :alt="pickText(product.title, product.title_en)" />
-        </div>
-        <ImageCarousel :images="product.images" :alt="pickText(product.title, product.title_en)" />
+        <ImageCarousel :images="carouselImages" :alt="pickText(product.title, product.title_en)" />
       </el-col>
       <el-col :span="14">
         <h2>{{ pickText(product.title, product.title_en) }}</h2>
         <p style="color:#666" v-if="pickText(product.author, product.author_en)">
           {{ t('product.author') }}：{{ pickText(product.author, product.author_en) }}
+        </p>
+        <p style="color:#666" v-if="pickText(product.publisher, product.publisher_en)">
+          {{ t('product.publisher') }}：{{ pickText(product.publisher, product.publisher_en) }}
         </p>
         <div class="price">￥{{ displayPrice }}</div>
 
@@ -20,7 +20,7 @@
         </div>
 
         <div v-for="name in optionNames" :key="name" class="mt16">
-          <span>{{ name }}：</span>
+          <span>{{ displayOptionKey(name) }}：</span>
           <el-select v-model="selections[name]" :placeholder="t('product.select')" style="width:180px">
             <el-option v-for="v in optionsMap[name]" :key="v" :label="displayOptionValue(name, v)" :value="v" />
           </el-select>
@@ -41,6 +41,12 @@
     </el-row>
 
     <div class="mt24">
+      <h3>{{ t('product.description') }}</h3>
+      <div style="white-space: pre-wrap; color:#444">
+        {{ pickText(product.description, product.description_en) || t('msg.noText') }}
+      </div>
+
+      <div class="mt24"></div>
       <h3>{{ t('product.reviews') }}</h3>
       <el-form :model="review" label-width="80px" class="mb16">
         <el-form-item :label="t('product.rating')">
@@ -72,6 +78,7 @@ import ImageCarousel from '../components/ImageCarousel.vue'
 import { extractErrorMessage } from '../api/error'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
+import { fallbackVersionToEnglish, getOptionValueI18n, pickProductText, translateOptionValue } from '../utils/productI18n'
 
 interface SKU { id:number; option_values:string; price_adjustment:number; stock_quantity:number; is_available:boolean }
 interface Product {
@@ -80,11 +87,14 @@ interface Product {
   title_en?: string | null
   author?:string | null
   author_en?: string | null
+  publisher?: string | null
+  publisher_en?: string | null
   base_price:number
   min_price?:number|null
   max_price?:number|null
-  images?:string|null
   options?:string|null
+  description?: string | null
+  description_en?: string | null
   skus:SKU[]
 }
 interface Review { id:number; rating:number; comment?:string|null; created_at:string }
@@ -94,23 +104,28 @@ const product = ref<Product | null>(null)
 const qty = ref(1)
 const reviews = ref<Review[]>([])
 const review = ref({ rating: 5, comment: '' })
-const { locale, t } = useI18n()
-
+const { t, locale } = useI18n()
 function pickText(zh?: string | null, en?: string | null) {
+  return pickProductText(zh, en, String(locale.value))
+}
+
+function pickVersionLabel(v: string) {
+  // 当前项目的 version 值是中文（平装/精装等），在非中文语言下做一个兜底翻译
   const l = String(locale.value)
-  if (l === 'en') return (en || zh || '')
-  return (zh || en || '')
+  if (l === 'zh' || l === 'zh-TW') return v
+  return fallbackVersionToEnglish(v)
 }
 
 function displayOptionValue(name: string, value: string) {
-  // SKU/选项值：尽量只翻译常见的“版本”字段
-  const l = String(locale.value)
+  // W2: non-zh locales should use English for product info, including option values.
+  // Prefer vendor-provided mapping in product.options.optionValueI18n, fallback to common version translation.
+  return translateOptionValue(name, value, product.value?.options || null, String(locale.value))
+}
+
+function displayOptionKey(name: string): string {
   const key = (name || '').toLowerCase()
-  if (l === 'en' && (key.includes('version') || name === '版本')) {
-    if (value === '平装') return t('product.paperback')
-    if (value === '精装') return t('product.hardcover')
-  }
-  return value
+  if (key.includes('version') || name === '版本') return t('product.version')
+  return name
 }
 
 // 解析 options 为通用结构
@@ -159,26 +174,39 @@ const canAddToCart = computed(() => {
   if (matchedSku.value.stock_quantity !== null && matchedSku.value.stock_quantity < 1) return false
   return true
 })
+const photosBySku = ref<Record<string, string[]>>({})
 
-const selectedImageUrl = computed(() => {
+const carouselImages = computed(() => {
+  // B1: show selected SKU's photos if available; else fallback to ANY sku photos
+  const skuId = matchedSku.value?.id
+  if (skuId != null) {
+    const list = photosBySku.value?.[String(skuId)]
+    if (Array.isArray(list) && list.length) return list
+  }
+  // fallback to first available sku photos
   try {
-    if (!product.value?.options) return ''
-    const obj = JSON.parse(product.value.options)
-    const mapping = obj?.optionImages // 约定的图片映射
-    if (!mapping || typeof mapping !== 'object') return ''
-    // 找到第一个带有映射的选项并已选择值
-    for (const name of Object.keys(mapping)) {
-      const value = selections[name]
-      if (value && mapping[name] && mapping[name][value]) return mapping[name][value]
+    const bySku = photosBySku.value || {}
+    for (const k of Object.keys(bySku)) {
+      const list = bySku[k]
+      if (Array.isArray(list) && list.length) return list
     }
-    return ''
-  } catch { return '' }
+  } catch {}
+  return null
 })
 
 async function load() {
   const id = Number(route.params.id)
   const { data } = await api.get(`/api/products/${id}`)
   product.value = data
+
+  // 加载 SKU 图片映射（B1/D2）
+  try {
+    const { data: photoData } = await api.get(`/api/products/${id}/photos`)
+    photosBySku.value = photoData?.by_sku || {}
+  } catch {
+    photosBySku.value = {}
+  }
+
   // 解析 options
   optionsMap.value = {}
   try {
@@ -191,10 +219,10 @@ async function load() {
     }
   } catch {}
   // 默认选择每个选项的第一个值
+  // D2: 不自动选择，要求用户显式选择每个选项。
+  // （simple product 通常没有 optionNames；matchedSku 会自动匹配默认 SKU）
   for (const name of optionNames.value) {
-    if (!selections[name] && optionsMap.value[name]?.length) {
-      selections[name] = optionsMap.value[name][0]
-    }
+    if (selections[name] === undefined) selections[name] = ''
   }
   const rv = await api.get(`/api/products/${id}/reviews`)
   reviews.value = rv.data
@@ -236,5 +264,4 @@ onMounted(load)
 .mt16{ margin-top:16px }
 .mt24{ margin-top:24px }
 .mb16{ margin-bottom:16px }
-.main-image img{ width:100%; height:260px; object-fit:cover; margin-bottom:8px; border:1px solid #eee }
 </style>

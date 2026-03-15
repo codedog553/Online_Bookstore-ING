@@ -6,19 +6,34 @@
       </el-carousel-item>
     </el-carousel>
     <div v-else style="height:260px;display:flex;align-items:center;justify-content:center;border:1px solid #eee;color:#888">
-      无图片
+      {{ t('msg.noImage') }}
     </div>
   </div>
 </template>
 <script setup lang="ts">
-const props = defineProps<{ images?: string | null; alt?: string }>()
-let imgs: string[] = []
-try {
-  if (props.images) {
-    const val = JSON.parse(props.images)
-    if (Array.isArray(val)) imgs = val
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { resolveBackendUrl } from '../utils/resolveUrl'
+
+type ImagesProp = string | string[] | null | undefined
+
+const props = defineProps<{ images?: ImagesProp; alt?: string }>()
+const { t } = useI18n()
+
+const imgs = computed<string[]>(() => {
+  const v = props.images
+  if (!v) return []
+  if (Array.isArray(v)) return v.map((x) => resolveBackendUrl(String(x))).filter(Boolean)
+
+  // string: support either JSON array string or a single URL string
+  const s = String(v).trim()
+  if (!s) return []
+  try {
+    const parsed = JSON.parse(s)
+    if (Array.isArray(parsed)) return parsed.map((x) => resolveBackendUrl(String(x))).filter(Boolean)
+  } catch {
+    // not JSON
   }
-} catch (e) {
-  imgs = []
-}
+  return [resolveBackendUrl(s)].filter(Boolean)
+})
 </script>

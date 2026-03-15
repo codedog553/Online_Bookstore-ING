@@ -16,6 +16,10 @@ from .auth import get_password_hash
 import json
 from typing import Optional
 
+import os
+import uuid
+from datetime import datetime, timedelta
+
 
 def reset_all(db: Session):
     # 简单清库（SQLite，无外键顺序要求时可直接删除；为简单起见逐表清理）
@@ -69,6 +73,7 @@ def create_product_with_skus(
     author: str,
     base_price: float,
     category_id: int,
+    # 注意：新实现的图片只走 SKU 本地上传（sku.photos），此处保留参数仅用于 seed 生成文件。
     images: list[str],
     *,
     title_en: Optional[str] = None,
@@ -85,7 +90,6 @@ def create_product_with_skus(
         description_en=description_en or f"Introduction of {title}...",
         category_id=category_id,
         is_active=True,
-        images=json.dumps(images, ensure_ascii=False),
         options=json.dumps({"version": ["平装", "精装"]}, ensure_ascii=False),
     )
     db.add(prod)
@@ -107,6 +111,30 @@ def create_product_with_skus(
         stock_quantity=20,
         is_available=True,
     )
+    db.add_all([sku1, sku2])
+    db.commit()
+
+    # 生成“本地上传”图片文件，并写入 sku.photos
+    uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+
+    def _write_dummy_image(sku_id: int, idx: int) -> str:
+        """写入一个占位文件（不是真图片），用于演示 /uploads 静态路径与多图机制。
+
+        注意：如果你希望在浏览器真实显示图片，请在管理端用“上传图片”功能上传 jpg/png。
+        """
+
+        sku_dir = os.path.join(uploads_dir, f"sku_{sku_id}")
+        os.makedirs(sku_dir, exist_ok=True)
+        filename = f"seed_{idx}_{uuid.uuid4().hex}.txt"
+        abs_path = os.path.join(sku_dir, filename)
+        with open(abs_path, "w", encoding="utf-8") as f:
+            f.write(f"seed placeholder for {title} sku {sku_id} image {idx}\n")
+        return f"/uploads/sku_{sku_id}/{filename}"
+
+    # 为每个 SKU 写入 2 个占位文件路径
+    sku1.photos = json.dumps([_write_dummy_image(sku1.id, 1), _write_dummy_image(sku1.id, 2)], ensure_ascii=False)
+    sku2.photos = json.dumps([_write_dummy_image(sku2.id, 1), _write_dummy_image(sku2.id, 2)], ensure_ascii=False)
     db.add_all([sku1, sku2])
     db.commit()
 
@@ -142,16 +170,41 @@ def create_demo_order_and_review(db: Session, user: models.User, product: models
     sku = db.query(models.ProductSKU).filter(models.ProductSKU.product_id == product.id, models.ProductSKU.option_values.like('%精装%')).first()
     unit_price = float(product.base_price) + float(sku.price_adjustment or 0)
 
+    # 订单 + 时间线（B4）：演示 pending -> shipped -> completed
+    created_at = datetime.utcnow() - timedelta(days=1)
+    shipped_at = created_at + timedelta(hours=4)
+    completed_at = shipped_at + timedelta(hours=6)
+
     od = models.Order(
         order_id="ORDER99991231-001",
         user_id=user.id,
         address_id=addr.id,
+        # 地址快照（A13）
+        ship_receiver_name=addr.receiver_name,
+        ship_phone=addr.phone,
+        ship_province=addr.province,
+        ship_city=addr.city,
+        ship_district=addr.district,
+        ship_detail_address=addr.detail_address,
         total_amount=unit_price,
         status="completed",
+        created_at=created_at,
+        shipped_at=shipped_at,
+        completed_at=completed_at,
     )
     db.add(od)
     db.commit()
     db.refresh(od)
+
+    # 时间线事件
+    db.add_all(
+        [
+            models.OrderStatusEvent(order_id=od.order_id, status="pending", created_at=created_at),
+            models.OrderStatusEvent(order_id=od.order_id, status="shipped", note="seed shipped", created_at=shipped_at),
+            models.OrderStatusEvent(order_id=od.order_id, status="completed", note="seed completed", created_at=completed_at),
+        ]
+    )
+    db.commit()
 
     oi = models.OrderItem(
         order_id=od.order_id,

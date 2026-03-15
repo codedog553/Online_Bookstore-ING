@@ -2,10 +2,14 @@
   <div>
     <h2>{{ t('cart.title') }}</h2>
     <el-table :data="items" v-loading="loading" style="width:100%">
-      <el-table-column :label="t('cart.product')" prop="product_title" width="260" />
+      <el-table-column :label="t('cart.product')" width="260">
+        <template #default="{ row }">
+          <router-link :to="`/products/${row.product_id}`">{{ displayProductTitle(row) }}</router-link>
+        </template>
+      </el-table-column>
       <el-table-column :label="t('cart.config')" width="180">
         <template #default="{ row }">
-          <span>{{ parseOption(row.option_values) }}</span>
+          <span>{{ (rowOptionsForParse = row.product_options || null, parseOption(row.option_values)) }}</span>
         </template>
       </el-table-column>
       <el-table-column :label="t('cart.unitPrice')" width="120">
@@ -13,7 +17,16 @@
       </el-table-column>
       <el-table-column :label="t('cart.quantity')" width="160">
         <template #default="{ row }">
-          <el-input-number v-model="row.quantity" :min="1" @change="(v:number)=>updateQty(row, v)" />
+          <div style="display:flex; flex-direction:column; gap:6px">
+            <el-input-number
+              v-model="row.quantity"
+              :min="1"
+              :max="row.stock_quantity != null && row.stock_quantity > 0 ? row.stock_quantity : undefined"
+              :disabled="row.is_available === false"
+              @change="(v:number)=>updateQty(row, v)"
+            />
+            <el-text v-if="!isRowPurchasable(row)" type="danger" size="small">{{ outOfStockText(row) }}</el-text>
+          </div>
         </template>
       </el-table-column>
       <el-table-column :label="t('cart.subtotal')" width="120">
@@ -28,7 +41,9 @@
 
     <div class="total">
       <div>{{ t('cart.total') }}：<b>￥{{ total.toFixed(2) }}</b></div>
-      <router-link to="/checkout"><el-button type="primary">{{ t('cart.checkout') }}</el-button></router-link>
+      <router-link to="/checkout">
+        <el-button type="primary" :disabled="!canCheckout">{{ t('cart.checkout') }}</el-button>
+      </router-link>
     </div>
   </div>
 </template>
@@ -38,17 +53,45 @@ import api from '../api/http'
 import { extractErrorMessage } from '../api/error'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
+import { formatOptionValues, pickProductText } from '../utils/productI18n'
 
-interface CartItem { id:number; sku_id:number; quantity:number; product_title:string; option_values:string; unit_price:number; subtotal:number }
+interface CartItem {
+  id:number
+  sku_id:number
+  quantity:number
+  product_id:number
+  product_title:string
+  product_title_en?: string | null
+  option_values:string
+  unit_price:number
+  subtotal:number
+
+  // D5: 后端返回的库存/可售状态，用于购物车提示与禁用结算。
+  stock_quantity?: number | null
+  is_available?: boolean | null
+}
 
 const items = ref<CartItem[]>([])
 const loading = ref(false)
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+function displayProductTitle(row: CartItem) {
+  return pickProductText(row.product_title, row.product_title_en || undefined, String(locale.value))
+}
 
 function parseOption(s: string){
-  try { const obj = JSON.parse(s); if (obj.version) return `${t('product.version')}：${obj.version}`; } catch{}
-  return s
+  // W2: translate option values in non-zh locales
+  return formatOptionValues(s, rowOptionsForParse.value, String(locale.value), (k) => {
+    const key = (k || '').toLowerCase()
+    if (key.includes('version') || k === '版本') return t('product.version')
+    return k
+  })
 }
+
+// Helper: formatOptionValues needs product_options per row.
+// For backward compatibility, we keep parseOption signature and set a reactive ref when rendering.
+import { computed as _computed } from 'vue'
+const rowOptionsForParse = ref<string | null>(null)
 
 async function load(){
   loading.value = true
@@ -79,6 +122,22 @@ async function remove(row: CartItem){
 }
 
 const total = computed(()=> items.value.reduce((acc, it)=> acc + it.unit_price * it.quantity, 0))
+
+function isRowPurchasable(row: CartItem): boolean {
+  if (row.is_available === false) return false
+  if (row.stock_quantity != null && row.quantity > row.stock_quantity) return false
+  return true
+}
+
+function outOfStockText(row: CartItem): string {
+  if (row.is_available === false) return t('cart.unavailable')
+  return t('cart.outOfStockInCart')
+}
+
+const canCheckout = computed(() => {
+  if (!items.value.length) return false
+  return items.value.every(isRowPurchasable)
+})
 
 onMounted(load)
 </script>

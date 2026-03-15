@@ -21,15 +21,21 @@ def get_cart(db: Session = Depends(get_db), current_user: models.User = Depends(
     result: List[schemas.CartItemOut] = []
     for it in items:
         unit_price = _sku_unit_price(it.sku)
+        prod = it.sku.product
         result.append(
             schemas.CartItemOut(
                 id=it.id,
                 sku_id=it.sku_id,
                 quantity=it.quantity,
-                product_title=it.sku.product.title,
+                product_id=prod.id,
+                product_title=prod.title,
+                product_title_en=prod.title_en,
                 option_values=it.sku.option_values,
+                product_options=prod.options,
                 unit_price=unit_price,
                 subtotal=unit_price * it.quantity,
+                stock_quantity=it.sku.stock_quantity,
+                is_available=it.sku.is_available,
             )
         )
     return result
@@ -76,6 +82,8 @@ def update_item(item_id: int, payload: schemas.CartItemUpdate, db: Session = Dep
         db.delete(item)
         db.commit()
         return schemas.Msg(message="已从购物车移除")
+    if not item.sku.is_available:
+        raise HTTPException(status_code=400, detail="SKU 不可售")
     if item.sku.stock_quantity is not None and payload.quantity > item.sku.stock_quantity:
         raise HTTPException(status_code=400, detail="库存不足")
     item.quantity = payload.quantity

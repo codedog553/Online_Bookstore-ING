@@ -3,6 +3,18 @@
     "cancel": "Cancel",
     "close": "Close"
   },
+  "lang": {
+    "zh": "Simplified Chinese",
+    "zhTW": "Traditional Chinese",
+    "en": "English",
+    "ja": "Japanese",
+    "short": {
+      "zh": "ZH",
+      "zhTW": "ZH-TW",
+      "en": "EN",
+      "ja": "JA"
+    }
+  },
   "app": {
     "title": "Online Bookstore",
     "language": "Language",
@@ -39,10 +51,13 @@
     "addedToCart": "Added to cart",
     "selectConfig": "Please select full configuration",
     "author": "Author",
+    "publisher": "Publisher",
+    "publisherEn": "Publisher (EN)",
     "quantity": "Quantity",
     "stock": "Stock",
     "outOfStock": "Out of stock",
     "select": "Select",
+    "description": "Description",
     "reviews": "Reviews",
     "noReviews": "No reviews",
     "rating": "Rating",
@@ -61,7 +76,9 @@
     "remove": "Remove",
     "checkout": "Checkout",
     "updateFailed": "Update failed",
-    "removeFailed": "Remove failed"
+    "removeFailed": "Remove failed",
+    "outOfStockInCart": "Some items are out of stock. Please update your cart.",
+    "unavailable": "Unavailable"
   },
   "order": {
     "checkoutTitle": "Checkout",
@@ -83,6 +100,12 @@
     "cancel": "Cancel order",
     "cancelSuccess": "Order cancelled",
     "cancelFailed": "Cancel failed",
+    "cancelledAt": "Cancelled at",
+    "completedAt": "Completed at",
+    "statusTimeline": "Status timeline",
+    "confirmReceived": "Confirm received",
+    "confirmReceivedSuccess": "Confirmed received",
+    "confirmReceivedFailed": "Confirm failed",
     "shippedAt": "Shipped at",
     "myOrdersTitle": "My orders",
     "filterStatus": "Filter status",
@@ -115,13 +138,32 @@
     "description": "Description",
     "descriptionEn": "Description (EN)",
     "imagesJson": "Images (JSON)",
+    "imagesJsonHint": "e.g. [\"https://...\",\"https://...\"] (optional)",
     "optionsJson": "Options (JSON)",
+    "optionsJsonHint": "e.g. {\"version\":[\"Paperback\",\"Hardcover\"],\"optionValueI18n\":{\"version\":{\"平装\":\"Paperback\",\"精装\":\"Hardcover\"}}}",
     "save": "Save",
+    "back": "Back",
     "ship": "Ship",
+    "shipSuccess": "Order shipped",
     "shipFailed": "Operation failed (admin required)",
+    "cancelOrder": "Cancel order",
+    "cancelSuccess": "Order cancelled",
+    "cancelFailed": "Cancel failed",
+    "customerName": "Customer",
+    "customerEmail": "Customer email",
+    "orderDetailTitle": "Order detail",
+    "orderItemsTitle": "Order items",
     "skuManage": "SKU",
     "manageSku": "Manage SKU",
+    "skuPhotos": "SKU photos",
+    "selectSkuTip": "Select a SKU row to manage photos",
+    "uploadSkuPhotos": "Upload photos",
+    "uploadSuccess": "Upload success",
+    "uploadFailed": "Upload failed",
+    "deleteSuccess": "Delete success",
+    "noPhotos": "No photos",
     "optionValuesJson": "Option values (JSON)",
+    "optionValuesJsonHint": "e.g. {\"version\":\"Paperback\"}",
     "priceAdjustment": "Price adjustment",
     "stockQuantity": "Stock",
     "available": "Available",
@@ -163,5 +205,6 @@
     ,"addToCartFailed": "Add to cart failed (login required?)"
     ,"reviewFailed": "Review failed (purchase required)"
     ,"saveAddressSuccess": "Address saved"
+    ,"loginToReview": "Please login to write a review"
   }
 }

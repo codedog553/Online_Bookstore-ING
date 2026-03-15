@@ -16,10 +16,10 @@
         <span class="el-dropdown-link">{{ t('app.language') }}: {{ currentLangLabel }}</span>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item @click="setLang('zh')">简体中文</el-dropdown-item>
-            <el-dropdown-item @click="setLang('zh-TW')">繁體中文</el-dropdown-item>
-            <el-dropdown-item @click="setLang('en')">English</el-dropdown-item>
-            <el-dropdown-item @click="setLang('ja')">日本語</el-dropdown-item>
+            <el-dropdown-item @click="setLang('zh')">{{ t('lang.zh') }}</el-dropdown-item>
+            <el-dropdown-item @click="setLang('zh-TW')">{{ t('lang.zhTW') }}</el-dropdown-item>
+            <el-dropdown-item @click="setLang('en')">{{ t('lang.en') }}</el-dropdown-item>
+            <el-dropdown-item @click="setLang('ja')">{{ t('lang.ja') }}</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -92,10 +92,10 @@ function goAdminReports() { router.push('/admin/reports') }
 
 const currentLangLabel = computed(() => {
   const l = String(locale.value)
-  if (l === 'zh') return '简中'
-  if (l === 'zh-TW') return '繁中'
-  if (l === 'en') return 'EN'
-  if (l === 'ja') return '日本語'
+  if (l === 'zh') return t('lang.short.zh')
+  if (l === 'zh-TW') return t('lang.short.zhTW')
+  if (l === 'en') return t('lang.short.en')
+  if (l === 'ja') return t('lang.short.ja')
   return l
 })
 

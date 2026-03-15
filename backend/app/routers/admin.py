@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+import os
+import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func, cast, String
 
@@ -11,6 +13,80 @@ from ..db import get_db
 from ..deps import get_current_admin
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+def _uploads_dir() -> str:
+    """后端 uploads 根目录（与 main.py 中保持一致）。"""
+
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
+
+
+def _ensure_sku_dir(sku_id: int) -> str:
+    base = os.path.abspath(_uploads_dir())
+    d = os.path.join(base, f"sku_{sku_id}")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _load_json_list(s: Optional[str]) -> List[str]:
+    if not s:
+        return []
+    try:
+        import json
+
+        v = json.loads(s)
+        return [str(x) for x in v] if isinstance(v, list) else []
+    except Exception:
+        return []
+
+
+def _dump_json_list(v: List[str]) -> str:
+    import json
+
+    return json.dumps(v, ensure_ascii=False)
+
+
+def _append_status_event(db: Session, order_id: str, status: str, note: Optional[str] = None) -> None:
+    """追加订单状态事件（B4）。"""
+
+    db.add(models.OrderStatusEvent(order_id=order_id, status=status, note=note))
+
+
+def _restore_inventory_for_order(db: Session, od: models.Order) -> None:
+    """取消订单时返还库存。"""
+
+    for it in od.items:
+        sku = it.sku
+        if sku.stock_quantity is not None:
+            sku.stock_quantity += it.quantity
+            db.add(sku)
+
+
+def _auto_cancel_expired_orders(db: Session) -> int:
+    """将超过 3 天仍为 pending 的订单自动取消（B2）。
+
+    说明：课程项目不引入后台 scheduler，这里采用“访问接口时触发扫描”。
+    """
+
+    expired_before = datetime.utcnow() - timedelta(days=3)
+    expired_orders = (
+        db.query(models.Order)
+        .filter(models.Order.status == "pending")
+        .filter(models.Order.created_at <= expired_before)
+        .all()
+    )
+    if not expired_orders:
+        return 0
+
+    for od in expired_orders:
+        _restore_inventory_for_order(db, od)
+        od.status = "cancelled"
+        od.cancelled_at = datetime.utcnow()
+        db.add(od)
+        _append_status_event(db, od.order_id, "cancelled", note="auto-cancel: vendor not shipped within 3 days")
+
+    db.commit()
+    return len(expired_orders)
 
 
 def _update_product_price_range(db: Session, product: models.Product):
@@ -88,6 +164,87 @@ def delete_sku(sku_id: int, db: Session = Depends(get_db), admin=Depends(get_cur
     return schemas.Msg(message="SKU 已删除")
 
 
+@router.post("/skus/{sku_id}/photos", response_model=schemas.SKUOut)
+def upload_sku_photos(
+    sku_id: int,
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """SKU 多图上传（B1/A16）。
+
+    - 使用本地文件上传保存到 backend/app/uploads/sku_{id}/
+    - sku.photos 存储 JSON string list，元素为可直接访问的静态路径（/uploads/...）
+    """
+
+    sku = db.query(models.ProductSKU).filter(models.ProductSKU.id == sku_id).first()
+    if not sku:
+        raise HTTPException(status_code=404, detail="SKU 不存在")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="未选择文件")
+
+    sku_dir = _ensure_sku_dir(sku_id)
+    existing = _load_json_list(sku.photos)
+
+    for f in files:
+        # 尽量保留扩展名，避免浏览器无法识别
+        ext = os.path.splitext(f.filename or "")[-1].lower()
+        if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+            raise HTTPException(status_code=400, detail=f"不支持的文件类型：{ext}")
+
+        filename = f"{uuid.uuid4().hex}{ext}"
+        path = os.path.join(sku_dir, filename)
+        with open(path, "wb") as out:
+            out.write(f.file.read())
+        existing.append(f"/uploads/sku_{sku_id}/{filename}")
+
+    sku.photos = _dump_json_list(existing)
+    db.add(sku)
+    db.commit()
+    db.refresh(sku)
+    return sku
+
+
+@router.delete("/skus/{sku_id}/photos", response_model=schemas.SKUOut)
+def delete_sku_photo(
+    sku_id: int,
+    path: str = Query(..., description="要删除的图片路径（/uploads/...）"),
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """删除 SKU 图片：从 sku.photos JSON 中移除，并删除本地文件。"""
+
+    sku = db.query(models.ProductSKU).filter(models.ProductSKU.id == sku_id).first()
+    if not sku:
+        raise HTTPException(status_code=404, detail="SKU 不存在")
+
+    photos = _load_json_list(sku.photos)
+    if path not in photos:
+        raise HTTPException(status_code=404, detail="图片不存在")
+
+    photos = [p for p in photos if p != path]
+
+    # 尝试删除本地文件：将 /uploads/... 映射到 uploads 目录
+    try:
+        rel = path.lstrip("/")
+        if rel.startswith("uploads/"):
+            rel = rel[len("uploads/") :]
+        abs_path = os.path.abspath(os.path.join(_uploads_dir(), rel))
+        base = os.path.abspath(_uploads_dir())
+        if abs_path.startswith(base) and os.path.exists(abs_path):
+            os.remove(abs_path)
+    except Exception:
+        # 文件删除失败不影响数据库更新（比如文件已不存在）
+        pass
+
+    sku.photos = _dump_json_list(photos)
+    db.add(sku)
+    db.commit()
+    db.refresh(sku)
+    return sku
+
+
 @router.post("/products", response_model=schemas.ProductOut)
 def create_product(payload: schemas.AdminProductCreate, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
     prod = models.Product(
@@ -95,17 +252,33 @@ def create_product(payload: schemas.AdminProductCreate, db: Session = Depends(ge
         title_en=payload.title_en,
         author=payload.author,
         author_en=payload.author_en,
+        publisher=payload.publisher,
+        publisher_en=payload.publisher_en,
         base_price=payload.base_price,
         description=payload.description,
         description_en=payload.description_en,
         category_id=payload.category_id,
         is_active=payload.is_active if payload.is_active is not None else True,
-        images=payload.images,
         options=payload.options,
     )
     db.add(prod)
     db.commit()
     db.refresh(prod)
+
+    # D1/D4: simple product 也必须有 1 个 SKU。
+    # 当 options 为空/缺省时，自动创建一个默认 SKU（option_values = {}）。
+    if not (prod.options and prod.options.strip()):
+        default_sku = models.ProductSKU(
+            product_id=prod.id,
+            option_values="{}",
+            price_adjustment=0,
+            stock_quantity=0,
+            is_available=True,
+        )
+        db.add(default_sku)
+        db.commit()
+        db.refresh(prod)
+
     _update_product_price_range(db, prod)
     db.commit()
     return prod
@@ -139,35 +312,81 @@ def list_all_products(db: Session = Depends(get_db), admin=Depends(get_current_a
     return query.order_by(models.Product.created_at.desc()).all()
 
 
-@router.get("/orders", response_model=List[schemas.OrderOut])
+@router.get("/orders", response_model=List[schemas.AdminOrderListOut])
 def admin_list_orders(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
-    orders = db.query(models.Order).order_by(models.Order.created_at.desc()).all()
-    result: List[schemas.OrderOut] = []
-    for od in orders:
-        items = [
-            schemas.OrderItemOut(
-                sku_id=it.sku_id,
-                quantity=it.quantity,
-                unit_price=float(it.unit_price),
-                option_values=it.option_values,
-            )
-            for it in od.items
-        ]
-        result.append(
-            schemas.OrderOut(
-                order_id=od.order_id,
-                total_amount=float(od.total_amount),
-                status=od.status,
-                shipped_at=od.shipped_at,
-                created_at=od.created_at,
-                items=items,
-            )
+    _auto_cancel_expired_orders(db)
+    rows = (
+        db.query(models.Order, models.User.full_name.label("customer_name"))
+        .join(models.User, models.User.id == models.Order.user_id)
+        .order_by(models.Order.created_at.desc())
+        .all()
+    )
+    return [
+        schemas.AdminOrderListOut(
+            order_id=od.order_id,
+            created_at=od.created_at,
+            total_amount=float(od.total_amount),
+            status=od.status,
+            shipped_at=od.shipped_at,
+            customer_name=customer_name,
         )
-    return result
+        for (od, customer_name) in rows
+    ]
+
+
+@router.get("/orders/{order_id}", response_model=schemas.OrderOut)
+def admin_get_order(order_id: str, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    """管理端订单详情（A20）。"""
+
+    _auto_cancel_expired_orders(db)
+    od = db.query(models.Order).filter(models.Order.order_id == order_id).first()
+    if not od:
+        raise HTTPException(status_code=404, detail="订单不存在")
+
+    items = [
+        schemas.OrderItemOut(
+            sku_id=it.sku_id,
+            quantity=it.quantity,
+            unit_price=float(it.unit_price),
+            option_values=it.option_values,
+            product_id=it.sku.product_id,
+            product_title=it.sku.product.title,
+            product_title_en=it.sku.product.title_en,
+            product_options=it.sku.product.options,
+            subtotal=float(it.unit_price) * it.quantity,
+        )
+        for it in od.items
+    ]
+
+    return schemas.OrderOut(
+        order_id=od.order_id,
+        total_amount=float(od.total_amount),
+        status=od.status,
+        shipped_at=od.shipped_at,
+        completed_at=od.completed_at,
+        cancelled_at=od.cancelled_at,
+        created_at=od.created_at,
+        items=items,
+        shipping_address=schemas.ShippingAddressSnapshotOut(
+            receiver_name=od.ship_receiver_name or (od.address.receiver_name if od.address else ""),
+            phone=od.ship_phone or (od.address.phone if od.address else None),
+            province=od.ship_province or (od.address.province if od.address else ""),
+            city=od.ship_city or (od.address.city if od.address else ""),
+            district=od.ship_district or (od.address.district if od.address else ""),
+            detail_address=od.ship_detail_address or (od.address.detail_address if od.address else ""),
+        ),
+        status_timeline=[
+            schemas.OrderStatusEventOut.model_validate(ev)
+            for ev in sorted(od.status_events, key=lambda e: e.created_at)
+        ],
+        customer_name=od.user.full_name,
+        customer_email=od.user.email,
+    )
 
 
 @router.post("/orders/{order_id}/ship", response_model=schemas.Msg)
 def mark_shipped(order_id: str, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    _auto_cancel_expired_orders(db)
     od = db.query(models.Order).filter(models.Order.order_id == order_id).first()
     if not od:
         raise HTTPException(status_code=404, detail="订单不存在")
@@ -176,8 +395,29 @@ def mark_shipped(order_id: str, db: Session = Depends(get_db), admin=Depends(get
     od.status = "shipped"
     od.shipped_at = datetime.utcnow()
     db.add(od)
+    _append_status_event(db, od.order_id, "shipped", note="shipped by vendor")
     db.commit()
     return schemas.Msg(message="已标记为已发货")
+
+
+@router.post("/orders/{order_id}/cancel", response_model=schemas.Msg)
+def admin_cancel_order(order_id: str, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    """管理端取消订单（B2）：pending -> cancelled。"""
+
+    _auto_cancel_expired_orders(db)
+    od = db.query(models.Order).filter(models.Order.order_id == order_id).first()
+    if not od:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if od.status != "pending":
+        raise HTTPException(status_code=400, detail="仅待处理订单可取消")
+
+    _restore_inventory_for_order(db, od)
+    od.status = "cancelled"
+    od.cancelled_at = datetime.utcnow()
+    db.add(od)
+    _append_status_event(db, od.order_id, "cancelled", note="cancelled by vendor")
+    db.commit()
+    return schemas.Msg(message="订单已取消")
 
 
 @router.get("/reviews", response_model=List[schemas.AdminReviewOut])

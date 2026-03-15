@@ -38,7 +38,22 @@ def init_db():
         # products 表新增英文信息列（商品信息仅要求 zh/en）
         _ensure_column(conn, "products", "title_en", "VARCHAR(200)")
         _ensure_column(conn, "products", "author_en", "VARCHAR(100)")
+        _ensure_column(conn, "products", "publisher", "VARCHAR(200)")
+        _ensure_column(conn, "products", "publisher_en", "VARCHAR(200)")
         _ensure_column(conn, "products", "description_en", "TEXT")
+
+        # product_skus: SKU 多图（B1/A16）
+        _ensure_column(conn, "product_skus", "photos", "TEXT")
+
+        # orders: 地址快照 + 状态时间点（A13/B4）
+        _ensure_column(conn, "orders", "ship_receiver_name", "VARCHAR(100)")
+        _ensure_column(conn, "orders", "ship_phone", "VARCHAR(20)")
+        _ensure_column(conn, "orders", "ship_province", "VARCHAR(50)")
+        _ensure_column(conn, "orders", "ship_city", "VARCHAR(50)")
+        _ensure_column(conn, "orders", "ship_district", "VARCHAR(50)")
+        _ensure_column(conn, "orders", "ship_detail_address", "VARCHAR(255)")
+        _ensure_column(conn, "orders", "completed_at", "DATETIME")
+        _ensure_column(conn, "orders", "cancelled_at", "DATETIME")
 
 
 def _ensure_column(conn, table: str, column: str, ddl_type: str):

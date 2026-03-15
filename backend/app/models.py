@@ -63,6 +63,9 @@ class Product(Base):
     title_en = Column(String(200), nullable=True)
     author = Column(String(100), nullable=True)
     author_en = Column(String(100), nullable=True)
+    # 出版方（A6 + W2）：中英双语
+    publisher = Column(String(200), nullable=True)
+    publisher_en = Column(String(200), nullable=True)
     base_price = Column(Numeric(10, 2), nullable=False)
     min_price = Column(Numeric(10, 2), nullable=True)
     max_price = Column(Numeric(10, 2), nullable=True)
@@ -88,6 +91,8 @@ class ProductSKU(Base):
     price_adjustment = Column(Numeric(10, 2), default=0)
     stock_quantity = Column(Integer, default=0)
     is_available = Column(Boolean, default=True)
+    # SKU 维度图片（B1/A16/D2）：JSON string list，存储相对静态路径（例如："/uploads/sku_12/a.jpg"）
+    photos = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -114,16 +119,42 @@ class Order(Base):
     order_id = Column(String(20), primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     address_id = Column(Integer, ForeignKey("addresses.id"), nullable=False)
+    # 订单下单时的地址快照（A13）：避免用户后续修改 last address 影响历史订单展示。
+    ship_receiver_name = Column(String(100), nullable=True)
+    ship_phone = Column(String(20), nullable=True)
+    ship_province = Column(String(50), nullable=True)
+    ship_city = Column(String(50), nullable=True)
+    ship_district = Column(String(50), nullable=True)
+    ship_detail_address = Column(String(255), nullable=True)
     total_amount = Column(Numeric(10, 2), nullable=False)
     status = Column(String(20), default="pending")  # pending, shipped, cancelled, completed
     shipped_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="orders", foreign_keys=[user_id])
     address = relationship("Address", back_populates="orders", foreign_keys=[address_id])
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    status_events = relationship("OrderStatusEvent", back_populates="order", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="order", foreign_keys="Review.order_id")
+
+
+class OrderStatusEvent(Base):
+    """订单状态时间线事件（B4）。
+
+    说明：每次状态变化都追加一条事件记录，用于前端展示 timeline。
+    """
+
+    __tablename__ = "order_status_events"
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(String(20), ForeignKey("orders.order_id"), nullable=False, index=True)
+    status = Column(String(20), nullable=False)
+    note = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    order = relationship("Order", back_populates="status_events", foreign_keys=[order_id])
 
 
 class OrderItem(Base):

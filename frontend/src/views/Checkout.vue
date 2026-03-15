@@ -21,7 +21,7 @@
         <el-table :data="items" size="small">
           <el-table-column prop="product_title" :label="t('cart.product')" />
           <el-table-column :label="t('cart.config')">
-            <template #default="{ row }">{{ parseOption(row.option_values) }}</template>
+            <template #default="{ row }">{{ (rowOptionsForParse = row.product_options || null, parseOption(row.option_values)) }}</template>
           </el-table-column>
           <el-table-column :label="t('cart.quantity')" width="80">
             <template #default="{ row }">{{ row.quantity }}</template>
@@ -31,6 +31,14 @@
           </el-table-column>
         </el-table>
         <div class="sum">{{ t('cart.total') }}：<b>￥{{ total.toFixed(2) }}</b></div>
+        <el-alert
+          v-if="hasOutOfStock"
+          :title="t('cart.outOfStockInCart')"
+          type="error"
+          show-icon
+          :closable="false"
+          style="margin-bottom: 12px"
+        />
         <el-button type="primary" :loading="placing" @click="placeOrder" :disabled="!canPlace">{{ t('order.placeOrder') }}</el-button>
       </el-col>
     </el-row>
@@ -43,28 +51,48 @@ import api from '../api/http'
 import { extractErrorMessage } from '../api/error'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
+import { formatOptionValues } from '../utils/productI18n'
 
-interface CartItem { id:number; sku_id:number; quantity:number; product_title:string; option_values:string; unit_price:number; subtotal:number }
+interface CartItem {
+  id:number
+  sku_id:number
+  quantity:number
+  product_title:string
+  option_values:string
+  unit_price:number
+  subtotal:number
+  product_options?: string | null
+  stock_quantity?: number | null
+  is_available?: boolean | null
+}
 
 const router = useRouter()
 const items = ref<CartItem[]>([])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const addr = ref({ receiver_name:'', phone:'', province:'', city:'', district:'', detail_address:'', is_default:true })
 const savingAddress = ref(false)
 const placing = ref(false)
 
 function parseOption(s: string){
-  try{
-    const o = JSON.parse(s)
-    if (o?.version) return `${t('product.version')}：${o.version}`
-    return s
-  }catch{ return s }
+  // Checkout cart items come from /api/cart and include product_options
+  return formatOptionValues(s, rowOptionsForParse.value, String(locale.value), (k) => {
+    const key = (k || '').toLowerCase()
+    if (key.includes('version') || k === '版本') return t('product.version')
+    return k
+  })
 }
+
+const rowOptionsForParse = ref<string | null>(null)
 const total = computed(()=> items.value.reduce((acc, it)=> acc + it.unit_price * it.quantity, 0))
+
+const hasOutOfStock = computed(() => {
+  return items.value.some((it) => it.is_available === false || (it.stock_quantity != null && it.quantity > it.stock_quantity))
+})
 
 const canPlace = computed(() => {
   if (!items.value.length) return false
+  if (hasOutOfStock.value) return false
   return Boolean(addr.value.receiver_name && addr.value.province && addr.value.city && addr.value.district && addr.value.detail_address)
 })
 

@@ -55,6 +55,7 @@ import { extractErrorMessage } from '../../api/error'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
+import { pickProductText } from '../../utils/productI18n'
 
 type Granularity = 'day' | 'week' | 'month'
 
@@ -95,9 +96,7 @@ let trendChart: echarts.ECharts | null = null
 let bestChart: echarts.ECharts | null = null
 
 function pickTitle(zh?: string | null, en?: string | null) {
-  const l = String(locale.value)
-  if (l === 'en') return en || zh || ''
-  return zh || en || ''
+  return pickProductText(zh, en, String(locale.value))
 }
 
 const trendPeriods = computed(() => summary.value?.series?.map((p) => p.period) || [])

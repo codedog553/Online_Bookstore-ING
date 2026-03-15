@@ -17,11 +17,26 @@ class UserBase(BaseModel):
     language: Optional[str] = "zh"
 
 
-class UserCreate(BaseModel):  
+class UserCreate(BaseModel):
+    """注册用户。
+
+    按需求 A1：注册时必须提供收货地址。
+    该地址会作为用户第一次下单时的默认/上一次地址（last address）。
+    """
+
+    class ShippingAddressIn(BaseModel):
+        receiver_name: str
+        phone: Optional[str] = None
+        province: str
+        city: str
+        district: str
+        detail_address: str
+
     full_name: str
     email: EmailStr
     # 需求：至少 8 位，且必须同时包含字母与数字
     password: str = Field(min_length=8)
+    shipping_address: ShippingAddressIn
 
     @field_validator("password")
     @classmethod
@@ -113,6 +128,7 @@ class SKUOut(BaseModel):
     price_adjustment: float
     stock_quantity: int
     is_available: bool
+    photos: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -125,6 +141,9 @@ class ProductOut(BaseModel):
     title_en: Optional[str] = None
     author: Optional[str] = None
     author_en: Optional[str] = None
+    # 出版方（A6/W2）：中英双语
+    publisher: Optional[str] = None
+    publisher_en: Optional[str] = None
     base_price: float
     min_price: Optional[float] = None
     max_price: Optional[float] = None
@@ -132,8 +151,14 @@ class ProductOut(BaseModel):
     description_en: Optional[str] = None
     category_id: Optional[int] = None
     is_active: bool
-    images: Optional[str] = None   # JSON 字符串列表
+    # 注意：P0 统一图片只走 SKU 本地上传（sku.photos）。
+    # 保留该字段仅为兼容旧数据/不做 DB 迁移；前端/后端新逻辑不再使用它。
+    images: Optional[str] = None   # DEPRECATED
     options: Optional[str] = None  # JSON 字符串
+
+    # A3/A16/P0: 商品缩略图（用于列表展示）。
+    # - 由后端动态计算（从任意 SKU photos 取第一张）。
+    thumbnail_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -167,10 +192,18 @@ class CartItemOut(BaseModel):
     sku_id: int
     quantity: int
     # 展示需要的冗余字段
+    product_id: int
     product_title: str
+    product_title_en: Optional[str] = None
     option_values: str
+    # 用于 W2：选项值的双语映射（从商品 options 下发）
+    product_options: Optional[str] = None
     unit_price: float
     subtotal: float
+
+    # D5: 前端需要知道是否缺货/不可售，以在购物车/结算页做提示与禁止下单。
+    stock_quantity: Optional[int] = None
+    is_available: Optional[bool] = None
 
 
 # 订单
@@ -206,14 +239,68 @@ class OrderItemOut(BaseModel):
     unit_price: float
     option_values: str
 
+    # 展示需要的冗余字段（A13/W2）
+    product_id: int
+    product_title: str
+    product_title_en: Optional[str] = None
+    # 用于 W2：选项值的双语映射（从商品 options 下发）
+    product_options: Optional[str] = None
+    subtotal: float
+
+
+class ShippingAddressSnapshotOut(BaseModel):
+    """订单内的收货地址快照（A13）。"""
+
+    receiver_name: str
+    phone: Optional[str] = None
+    province: str
+    city: str
+    district: str
+    detail_address: str
+
+
+class OrderStatusEventOut(BaseModel):
+    """订单状态时间线事件（B4）。"""
+
+    id: int
+    order_id: str
+    status: str
+    note: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 
 class OrderOut(BaseModel):
     order_id: str
     total_amount: float
     status: str
     shipped_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
     created_at: datetime
     items: List[OrderItemOut] = []
+
+    # 订单详情展示字段（A13/B4）
+    shipping_address: Optional[ShippingAddressSnapshotOut] = None
+    status_timeline: List[OrderStatusEventOut] = []
+
+    # 管理端可选展示字段（A19/A20）
+    customer_name: Optional[str] = None
+    customer_email: Optional[EmailStr] = None
+
+
+class AdminOrderListOut(BaseModel):
+    """管理端订单列表（A19）。"""
+
+    order_id: str
+    created_at: datetime
+    total_amount: float
+    status: str
+    shipped_at: Optional[datetime] = None
+    customer_name: str
+
 
 
 # 评论
@@ -238,16 +325,18 @@ class ReviewOut(BaseModel):
 
 # 管理端
 class AdminProductCreate(BaseModel):
+    # W2: 商品信息必须中英双语输入（后端强约束，避免绕过前端）
     title: str
-    title_en: Optional[str] = None
-    author: Optional[str] = None
-    author_en: Optional[str] = None
+    title_en: str
+    author: str
+    author_en: str
+    publisher: str
+    publisher_en: str
     base_price: float
-    description: Optional[str] = None
-    description_en: Optional[str] = None
+    description: str
+    description_en: str
     category_id: Optional[int] = None
     is_active: Optional[bool] = True
-    images: Optional[str] = None
     options: Optional[str] = None
 
 
@@ -256,12 +345,13 @@ class AdminProductUpdate(BaseModel):
     title_en: Optional[str] = None
     author: Optional[str] = None
     author_en: Optional[str] = None
+    publisher: Optional[str] = None
+    publisher_en: Optional[str] = None
     base_price: Optional[float] = None
     description: Optional[str] = None
     description_en: Optional[str] = None
     category_id: Optional[int] = None
     is_active: Optional[bool] = None
-    images: Optional[str] = None
     options: Optional[str] = None
 
 

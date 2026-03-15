@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -8,6 +8,55 @@ from ..db import get_db
 from ..deps import get_current_user
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+
+def _sku_unit_price(sku: models.ProductSKU) -> float:
+    base = float(sku.product.base_price)
+    adj = float(sku.price_adjustment or 0)
+    return base + adj
+
+
+def _append_status_event(db: Session, order_id: str, status: str, note: Optional[str] = None) -> None:
+    """追加订单状态事件（B4）。"""
+
+    db.add(models.OrderStatusEvent(order_id=order_id, status=status, note=note))
+
+
+def _restore_inventory_for_order(db: Session, od: models.Order) -> None:
+    """取消订单时返还库存。"""
+
+    for it in od.items:
+        sku = it.sku
+        if sku.stock_quantity is not None:
+            sku.stock_quantity += it.quantity
+            db.add(sku)
+
+
+def _auto_cancel_expired_orders(db: Session) -> int:
+    """将超过 3 天仍为 pending 的订单自动取消（B2）。
+
+    设计说明：课程项目不引入后台 scheduler，这里采用“访问接口时触发扫描”。
+    """
+
+    expired_before = datetime.utcnow() - timedelta(days=3)
+    expired_orders = (
+        db.query(models.Order)
+        .filter(models.Order.status == "pending")
+        .filter(models.Order.created_at <= expired_before)
+        .all()
+    )
+    if not expired_orders:
+        return 0
+
+    for od in expired_orders:
+        _restore_inventory_for_order(db, od)
+        od.status = "cancelled"
+        od.cancelled_at = datetime.utcnow()
+        db.add(od)
+        _append_status_event(db, od.order_id, "cancelled", note="auto-cancel: vendor not shipped within 3 days")
+
+    db.commit()
+    return len(expired_orders)
 
 
 def _upsert_last_address(
@@ -83,12 +132,6 @@ def _upsert_last_address(
     return addr
 
 
-def _sku_unit_price(sku: models.ProductSKU) -> float:
-    base = float(sku.product.base_price)
-    adj = float(sku.price_adjustment or 0)
-    return base + adj
-
-
 def _generate_order_id(db: Session) -> str:
     today = datetime.utcnow().strftime("%Y%m%d")
     prefix = f"ORDER{today}-"
@@ -99,13 +142,19 @@ def _generate_order_id(db: Session) -> str:
 
 
 @router.get("", response_model=List[schemas.OrderOut])
-def list_my_orders(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    orders = (
-        db.query(models.Order)
-        .filter(models.Order.user_id == current_user.id)
-        .order_by(models.Order.created_at.desc())
-        .all()
-    )
+def list_my_orders(
+    status: Optional[str] = Query(
+        None,
+        description="可选：按状态过滤（pending/shipped/cancelled/completed）",
+    ),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    _auto_cancel_expired_orders(db)
+    q = db.query(models.Order).filter(models.Order.user_id == current_user.id)
+    if status:
+        q = q.filter(models.Order.status == status)
+    orders = q.order_by(models.Order.created_at.desc()).all()
     result: List[schemas.OrderOut] = []
     for od in orders:
         items = [
@@ -114,6 +163,11 @@ def list_my_orders(db: Session = Depends(get_db), current_user: models.User = De
                 quantity=it.quantity,
                 unit_price=float(it.unit_price),
                 option_values=it.option_values,
+                product_id=it.sku.product_id,
+                product_title=it.sku.product.title,
+                product_options=it.sku.product.options,
+                product_title_en=it.sku.product.title_en,
+                subtotal=float(it.unit_price) * it.quantity,
             )
             for it in od.items
         ]
@@ -123,6 +177,8 @@ def list_my_orders(db: Session = Depends(get_db), current_user: models.User = De
                 total_amount=float(od.total_amount),
                 status=od.status,
                 shipped_at=od.shipped_at,
+                completed_at=od.completed_at,
+                cancelled_at=od.cancelled_at,
                 created_at=od.created_at,
                 items=items,
             )
@@ -132,6 +188,7 @@ def list_my_orders(db: Session = Depends(get_db), current_user: models.User = De
 
 @router.get("/{order_id}", response_model=schemas.OrderOut)
 def get_order(order_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    _auto_cancel_expired_orders(db)
     od = (
         db.query(models.Order)
         .filter(models.Order.order_id == order_id, models.Order.user_id == current_user.id)
@@ -145,6 +202,11 @@ def get_order(order_id: str, db: Session = Depends(get_db), current_user: models
             quantity=it.quantity,
             unit_price=float(it.unit_price),
             option_values=it.option_values,
+            product_id=it.sku.product_id,
+            product_title=it.sku.product.title,
+            product_title_en=it.sku.product.title_en,
+            product_options=it.sku.product.options,
+            subtotal=float(it.unit_price) * it.quantity,
         )
         for it in od.items
     ]
@@ -153,13 +215,32 @@ def get_order(order_id: str, db: Session = Depends(get_db), current_user: models
         total_amount=float(od.total_amount),
         status=od.status,
         shipped_at=od.shipped_at,
+        completed_at=od.completed_at,
+        cancelled_at=od.cancelled_at,
         created_at=od.created_at,
         items=items,
+        shipping_address=(
+            schemas.ShippingAddressSnapshotOut(
+                receiver_name=od.ship_receiver_name or od.address.receiver_name,
+                phone=od.ship_phone or od.address.phone,
+                province=od.ship_province or od.address.province,
+                city=od.ship_city or od.address.city,
+                district=od.ship_district or od.address.district,
+                detail_address=od.ship_detail_address or od.address.detail_address,
+            )
+            if od.address
+            else None
+        ),
+        status_timeline=[
+            schemas.OrderStatusEventOut.model_validate(ev)
+            for ev in sorted(od.status_events, key=lambda e: e.created_at)
+        ],
     )
 
 
 @router.post("", response_model=schemas.OrderOut)
 def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    _auto_cancel_expired_orders(db)
     # 兼容两种下单方式：
     # 1) 旧版：前端提交 address_id（从地址簿选择）
     # 2) 新版：前端提交 address（下单时填写/预填的地址对象，仅保存“上一次地址”）
@@ -201,11 +282,20 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
         order_id=order_id,
         user_id=current_user.id,
         address_id=addr.id,
+        # 地址快照（A13）：下单瞬间复制，用于历史订单展示。
+        ship_receiver_name=addr.receiver_name,
+        ship_phone=addr.phone,
+        ship_province=addr.province,
+        ship_city=addr.city,
+        ship_district=addr.district,
+        ship_detail_address=addr.detail_address,
         total_amount=total,
         status="pending",
     )
     db.add(order)
     db.flush()  # 使 order 可引用
+
+    _append_status_event(db, order.order_id, "pending")
 
     for it in cart_items:
         unit_price = _sku_unit_price(it.sku)
@@ -234,6 +324,11 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
             quantity=it.quantity,
             unit_price=float(it.unit_price),
             option_values=it.option_values,
+            product_id=it.sku.product_id,
+            product_title=it.sku.product.title,
+            product_title_en=it.sku.product.title_en,
+            product_options=it.sku.product.options,
+            subtotal=float(it.unit_price) * it.quantity,
         )
         for it in order.items
     ]
@@ -242,13 +337,28 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
         total_amount=float(order.total_amount),
         status=order.status,
         shipped_at=order.shipped_at,
+        completed_at=order.completed_at,
+        cancelled_at=order.cancelled_at,
         created_at=order.created_at,
         items=items,
+        shipping_address=schemas.ShippingAddressSnapshotOut(
+            receiver_name=order.ship_receiver_name or addr.receiver_name,
+            phone=order.ship_phone or addr.phone,
+            province=order.ship_province or addr.province,
+            city=order.ship_city or addr.city,
+            district=order.ship_district or addr.district,
+            detail_address=order.ship_detail_address or addr.detail_address,
+        ),
+        status_timeline=[
+            schemas.OrderStatusEventOut.model_validate(ev)
+            for ev in sorted(order.status_events, key=lambda e: e.created_at)
+        ],
     )
 
 
 @router.post("/{order_id}/cancel", response_model=schemas.Msg)
 def cancel_order(order_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    _auto_cancel_expired_orders(db)
     od = (
         db.query(models.Order)
         .filter(models.Order.order_id == order_id, models.Order.user_id == current_user.id)
@@ -259,13 +369,33 @@ def cancel_order(order_id: str, db: Session = Depends(get_db), current_user: mod
     if od.status != "pending":
         raise HTTPException(status_code=400, detail="仅待处理订单可取消")
 
-    # 返还库存
-    for it in od.items:
-        sku = it.sku
-        if sku.stock_quantity is not None:
-            sku.stock_quantity += it.quantity
-            db.add(sku)
+    _restore_inventory_for_order(db, od)
     od.status = "cancelled"
+    od.cancelled_at = datetime.utcnow()
     db.add(od)
+    _append_status_event(db, od.order_id, "cancelled", note="cancelled by customer")
     db.commit()
     return schemas.Msg(message="订单已取消")
+
+
+@router.post("/{order_id}/complete", response_model=schemas.Msg)
+def complete_order(order_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """用户确认收货（B2）：shipped -> completed。"""
+
+    _auto_cancel_expired_orders(db)
+    od = (
+        db.query(models.Order)
+        .filter(models.Order.order_id == order_id, models.Order.user_id == current_user.id)
+        .first()
+    )
+    if not od:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if od.status != "shipped":
+        raise HTTPException(status_code=400, detail="仅已发货订单可确认收货")
+
+    od.status = "completed"
+    od.completed_at = datetime.utcnow()
+    db.add(od)
+    _append_status_event(db, od.order_id, "completed", note="confirmed by customer")
+    db.commit()
+    return schemas.Msg(message="已确认收货")

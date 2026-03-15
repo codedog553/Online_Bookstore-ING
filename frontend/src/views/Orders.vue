@@ -23,7 +23,9 @@
       <el-table-column :label="t('order.amount')" width="120">
         <template #default="{ row }">￥{{ row.total_amount.toFixed(2) }}</template>
       </el-table-column>
-      <el-table-column prop="status" :label="t('order.status')" />
+      <el-table-column :label="t('order.status')" width="120">
+        <template #default="{ row }">{{ t(`status.${row.status}`) }}</template>
+      </el-table-column>
     </el-table>
   </div>
 </template>
