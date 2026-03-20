@@ -20,6 +20,13 @@ const routes: RouteRecordRaw[] = [
   { path: '/admin/reports', component: () => import('../views/admin/AdminReports.vue'), meta: { requiresAdmin: true } },
 ]
 
+// =========================
+// Requirements Traceability
+// =========================
+// A2: 商品列表/搜索/详情允许未登录访问（/products* 不带 requiresAuth）。
+//     购物车/结算/订单则要求登录（requiresAuth），并由前端路由守卫 + 后端 JWT 双重保证。
+// A14~A20: 管理端页面 requiresAdmin（vendor/admin portal）。
+
 const router = createRouter({
   history: createWebHistory(),
   routes,
@@ -34,11 +41,13 @@ router.beforeEach((to) => {
   const requiresAdmin = Boolean(to.meta?.requiresAdmin)
 
   if (requiresAuth && !token) {
+    // A2: 未登录用户访问需要登录的页面时，重定向到 /login。
     ElMessage.warning(i18n.global.t('msg.loginRequired'))
     return { path: '/login', query: { redirect: to.fullPath } }
   }
 
   if (requiresAdmin) {
+    // A14~A20: 管理端必须登录且具备 is_admin。
     if (!token) {
       ElMessage.warning(i18n.global.t('msg.loginRequired'))
       return { path: '/login', query: { redirect: to.fullPath } }

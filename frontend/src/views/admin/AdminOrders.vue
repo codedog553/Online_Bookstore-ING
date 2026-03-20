@@ -39,6 +39,13 @@ import { extractErrorMessage } from '../../api/error'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A19: vendor/admin 可查看所有用户订单列表（按下单时间倒序），展示订单号/时间/客户名/金额/状态。
+// A20: 点击订单进入详情页。
+// B2/B4: vendor 可对 pending 订单执行发货/取消，从而触发状态流转并记录时间点。
+
 interface Order { order_id:string; total_amount:number; status:string; shipped_at?:string|null; created_at:string; customer_name:string }
 
 const list = ref<Order[]>([])

@@ -5,6 +5,13 @@ import re
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
+# 需求标注说明：
+# - A*：顾客侧账号 / 商品浏览 / 购物车 / 订单
+# - B*：商品多图 / 订单状态流转 / 状态时间线
+# - D*：可配置商品 / SKU / 库存
+# - W*：国际化与商品双语字段
+
+
 # 通用
 class Msg(BaseModel):
     message: str
@@ -122,6 +129,7 @@ class CategoryOut(BaseModel):
 
 # 商品与 SKU
 class SKUOut(BaseModel):
+    # D1/D4/D5：SKU 响应承担“具体配置 + 库存 + 可售状态 + 多图”的输出责任。
     id: int
     product_id: int
     option_values: str  # JSON 字符串
@@ -135,6 +143,10 @@ class SKUOut(BaseModel):
 
 
 class ProductOut(BaseModel):
+    # A3/A6/W2：商品列表与详情共用的核心展示结构。
+    # - A3：用于商品列表基础信息展示
+    # - A6：详情页额外属性（作者、出版方等）
+    # - W2：商品字段采用中英双语存储
     id: int
     title: str
     # 商品信息国际化：仅要求支持中文(默认)与英文
@@ -179,15 +191,21 @@ class PagedProductsOut(BaseModel):
 
 # 购物车
 class CartItemCreate(BaseModel):
+    # A7/D2：加入购物车时必须指定具体 SKU；可配置商品不能只传 product_id。
     sku_id: int
     quantity: int = 1
 
 
 class CartItemUpdate(BaseModel):
+    # A9：购物车数量修改入口。
     quantity: int
 
 
 class CartItemOut(BaseModel):
+    # A8/A9/A10/D3/D5：购物车列表项的完整展示/校验信息。
+    # - A8：展示商品名、价格、数量、小计
+    # - D3：区分同一本书的不同配置
+    # - D5：携带库存与可售状态，供前端拦截缺货下单
     id: int
     sku_id: int
     quantity: int
@@ -234,6 +252,7 @@ class OrderCreate(BaseModel):
 
 
 class OrderItemOut(BaseModel):
+    # A13/D3：订单项输出的是“下单瞬间的商品/SKU 快照视角”。
     sku_id: int
     quantity: int
     unit_price: float
@@ -273,6 +292,11 @@ class OrderStatusEventOut(BaseModel):
 
 
 class OrderOut(BaseModel):
+    # A12/A13/B3/B4：订单列表与详情的统一返回结构。
+    # - A12：订单列表基础字段
+    # - A13：订单详情中的地址快照、行项目
+    # - B3：前端可依据当前 status 做过滤
+    # - B4：状态时间线在详情中展示
     order_id: str
     total_amount: float
     status: str
@@ -325,6 +349,10 @@ class ReviewOut(BaseModel):
 
 # 管理端
 class AdminProductCreate(BaseModel):
+    # A16/A17/D1/W2：管理端创建商品时的输入结构。
+    # - A16：商品基本信息新增
+    # - D1：允许定义 configurable product 的 options
+    # - W2：强制录入中英双语商品文案
     # W2: 商品信息必须中英双语输入（后端强约束，避免绕过前端）
     title: str
     title_en: str
@@ -341,6 +369,7 @@ class AdminProductCreate(BaseModel):
 
 
 class AdminProductUpdate(BaseModel):
+    # A17/A18/D1/W2：管理端编辑商品与启停商品时使用。
     title: Optional[str] = None
     title_en: Optional[str] = None
     author: Optional[str] = None
@@ -395,6 +424,8 @@ class AdminReviewUpdate(BaseModel):
 
 # 管理端 - SKU
 class AdminSKUCreate(BaseModel):
+    # D1/D4/D5/B1：新增 SKU 时定义配置、加价、库存、可售状态。
+    # 图片单独通过上传接口维护，因此这里不直接放 photos 字段。
     option_values: str  # JSON 字符串，例如 {"color":"red","size":"M"}
     price_adjustment: float = 0.0
     stock_quantity: int = 0
@@ -402,6 +433,7 @@ class AdminSKUCreate(BaseModel):
 
 
 class AdminSKUUpdate(BaseModel):
+    # D4/D5：SKU 编辑主要覆盖配置、库存与是否可售。
     option_values: Optional[str] = None
     price_adjustment: Optional[float] = None
     stock_quantity: Optional[int] = None

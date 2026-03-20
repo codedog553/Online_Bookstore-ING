@@ -7,6 +7,12 @@ from ..db import get_db
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+# =========================
+# Requirements Traceability
+# =========================
+# A1: Customers register with full name/email/password/shipping address; the address becomes the first "last address".
+# A2: Login gates server-side persisted capabilities (cart/orders/addresses) via JWT.
+
 
 def _create_initial_address(db: Session, user: models.User, addr_in: schemas.UserCreate.ShippingAddressIn) -> models.Address:
     """注册时创建用户的首个地址，并写入 default_address_id。
@@ -34,6 +40,9 @@ def _create_initial_address(db: Session, user: models.User, addr_in: schemas.Use
 
 @router.post("/register", response_model=schemas.Token)
 def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
+    # A1：注册时要求提交 full name / email / password / shipping address。
+    # A1：这里先创建用户，再立刻创建首个地址记录，并把它标记为 default/last address。
+    #      该 default_address_id 会被结算页当作“上一次地址”预填来源。
     exists = db.query(models.User).filter(models.User.email == user_in.email).first()
     if exists:
         raise HTTPException(status_code=400, detail="邮箱已被注册")
@@ -58,6 +67,9 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=schemas.Token)
 def login(cred: schemas.UserLogin, db: Session = Depends(get_db)):
+    # A2：登录是购物车、订单、地址等“登录后能力”的入口。
+    # A2：产品浏览/搜索/详情无需登录（见 products.py 中无 Depends(get_current_user)）；
+    #     需要服务器侧持久化的用户能力（cart/orders/addresses）则依赖该认证结果。
     user = db.query(models.User).filter(models.User.email == cred.email).first()
     if not user or not verify_password(cred.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="邮箱或密码错误")

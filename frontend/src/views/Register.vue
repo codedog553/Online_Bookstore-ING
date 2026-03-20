@@ -35,6 +35,13 @@ import { extractErrorMessage } from '../api/error'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A1: 用户注册必须填写：姓名/邮箱/密码/收货地址。
+//     该地址会被后端保存为用户的“第一次 last address”，用于第一次结算默认预填。
+// W1: 本页的非商品文案来自 i18n json。
+
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
@@ -52,6 +59,7 @@ const form = reactive({
 const { t } = useI18n()
 
 async function onSubmit() {
+  // A1: 这里对收货地址做前端必填校验；后端 schemas.UserCreate 也会校验字段。
   if (!form.full_name || !form.email || !form.password) return
   if (!form.receiver_name || !form.province || !form.city || !form.district || !form.detail_address) {
     ElMessage.warning(t('msg.fillRequired'))

@@ -9,15 +9,32 @@ from ..deps import get_current_user
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
+# =========================
+# Requirements Traceability
+# =========================
+# A2: After login, customers can manage orders; orders are persisted server-side.
+# A11: Checkout creates a purchase order and clears the cart.
+# A12: Customers can list their purchase orders (reverse chronological).
+# A13: Order detail includes shipping address snapshot + line items (unit price/subtotal) + status.
+# B2: Order workflow status (pending/shipped/cancelled/completed) + allowed transitions.
+# B3: Filter order list by current (latest) status.
+# B4: Status timeline (OrderStatusEvent) keeps timestamps for changes.
+# D3: Different SKU configurations are separate line items.
+# D5: Validate SKU availability/stock again at checkout.
+
 
 def _sku_unit_price(sku: models.ProductSKU) -> float:
+    # A11/A13：订单项单价在下单瞬间固定为“商品基础价 + SKU 加价”。
     base = float(sku.product.base_price)
     adj = float(sku.price_adjustment or 0)
     return base + adj
 
 
 def _append_status_event(db: Session, order_id: str, status: str, note: Optional[str] = None) -> None:
-    """追加订单状态事件（B4）。"""
+    """追加订单状态事件（B4）。
+
+    B4：系统以时间线形式记录状态名与开始时间点。
+    """
 
     db.add(models.OrderStatusEvent(order_id=order_id, status=status, note=note))
 
@@ -150,6 +167,8 @@ def list_my_orders(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    # A12：订单列表按购买时间倒序展示（created_at desc）。
+    # B3：订单列表可按 status 过滤；过滤依据为 orders.status（即订单“当前/最后状态”）。
     _auto_cancel_expired_orders(db)
     q = db.query(models.Order).filter(models.Order.user_id == current_user.id)
     if status:
@@ -188,6 +207,9 @@ def list_my_orders(
 
 @router.get("/{order_id}", response_model=schemas.OrderOut)
 def get_order(order_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # A13：订单详情返回地址快照（ship_* 字段）、行项目快照（unit_price/option_values），
+    #      以保证历史订单展示不受后续地址或商品配置变更影响。
+    # B4：同时返回状态时间线（OrderStatusEvent），用于前端 timeline 展示。
     _auto_cancel_expired_orders(db)
     od = (
         db.query(models.Order)
@@ -240,11 +262,15 @@ def get_order(order_id: str, db: Session = Depends(get_db), current_user: models
 
 @router.post("", response_model=schemas.OrderOut)
 def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # A11：结算会创建订单，并在成功后清空购物车。
+    # A1：若本次提交了新地址，则把它覆盖保存为用户的 last address（default_address_id），用于下次自动预填。
+    # D5：下单前再次校验 SKU 是否可售、库存是否充足。
     _auto_cancel_expired_orders(db)
     # 兼容两种下单方式：
     # 1) 旧版：前端提交 address_id（从地址簿选择）
     # 2) 新版：前端提交 address（下单时填写/预填的地址对象，仅保存“上一次地址”）
     if payload.address_id:
+        # A1：兼容旧版“地址簿选择”，仍把选中地址当作 last address。
         addr = (
             db.query(models.Address)
             .filter(
@@ -260,6 +286,7 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
         db.add(current_user)
         db.flush()
     else:
+        # A1：新版“结算页填写地址”——只记忆上一次地址，不维护可选地址列表。
         # 下单时填写地址，并保存为“上一次地址”供下次预填。
         # payload.address 在 schemas 中已通过 model_validator 做了非空校验
         addr = _upsert_last_address(db, current_user, payload.address)  # type: ignore[arg-type]
@@ -268,7 +295,7 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
     if not cart_items:
         raise HTTPException(status_code=400, detail="购物车为空")
 
-    # 校验库存、计算金额
+    # A8/A11/D5：校验库存并计算订单总金额。
     total = 0.0
     for it in cart_items:
         if not it.sku.is_available:
@@ -282,7 +309,7 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
         order_id=order_id,
         user_id=current_user.id,
         address_id=addr.id,
-        # 地址快照（A13）：下单瞬间复制，用于历史订单展示。
+        # A13：地址快照（ship_*）：下单瞬间复制，用于历史订单展示。
         ship_receiver_name=addr.receiver_name,
         ship_phone=addr.phone,
         ship_province=addr.province,
@@ -295,6 +322,8 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
     db.add(order)
     db.flush()  # 使 order 可引用
 
+    # B2：订单创建时的初始状态为 pending。
+    # B4：并同步记录时间线起点（pending event）。
     _append_status_event(db, order.order_id, "pending")
 
     for it in cart_items:
@@ -305,10 +334,12 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
                 sku_id=it.sku_id,
                 quantity=it.quantity,
                 unit_price=unit_price,
+                # D3/A13：订单项保留配置快照，支持同一本书多个版本同时购买，
+                # 且历史订单不受后续 SKU 文案或配置结构调整影响。
                 option_values=it.sku.option_values,
             )
         )
-        # 扣减库存
+        # D5：扣减库存（SKU 维度）。
         if it.sku.stock_quantity is not None:
             it.sku.stock_quantity = max(0, it.sku.stock_quantity - it.quantity)
             db.add(it.sku)
@@ -358,6 +389,7 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db), cu
 
 @router.post("/{order_id}/cancel", response_model=schemas.Msg)
 def cancel_order(order_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # B2：客户仅可取消 pending 订单；取消后返还库存，并写入 cancelled 时间线事件。
     _auto_cancel_expired_orders(db)
     od = (
         db.query(models.Order)

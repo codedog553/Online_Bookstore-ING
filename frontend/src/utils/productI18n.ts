@@ -9,6 +9,15 @@
  * UI labels (buttons, table headers...) are still translated by vue-i18n (W1).
  */
 
+// =========================
+// Requirements Traceability
+// =========================
+// W1: “非商品信息”的多语言由 vue-i18n/en.json/zh.json/... 提供。
+// W2: “商品信息”要求双语录入（zh + en）；本文件实现前端展示规则：
+//     - locale 为 zh/zh-TW：统一展示中文（简体字段）；
+//     - 其他语言（en/ja/...）：统一展示英文字段；
+//     - 用户评论等 UGC 保留原文不翻译（见各页面直接展示 comment）。
+
 export function shouldUseChineseProductText(locale: string): boolean {
   return locale === 'zh' || locale === 'zh-TW'
 }

@@ -34,6 +34,13 @@ import { ref, computed, onMounted } from 'vue'
 import api from '../api/http'
 import { useI18n } from 'vue-i18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A2: 订单页面必须登录（路由 requiresAuth）。
+// A12: 展示用户订单列表（后端已按时间倒序返回）。
+// B3: 支持按订单当前状态过滤（pending/shipped/cancelled/completed）。
+
 interface OrderItem { sku_id:number; quantity:number; unit_price:number; option_values:string }
 interface Order { order_id:string; total_amount:number; status:string; shipped_at?:string|null; created_at:string; items:OrderItem[] }
 
@@ -45,6 +52,8 @@ const { t } = useI18n()
 async function load(){
   loading.value = true
   try{
+    // A12/B3: 后端接口支持 status 参数过滤；本页当前实现用前端过滤（filtered computed）。
+    //         若要改为后端过滤，可传 /api/orders?status=pending（本任务按系统规则不改逻辑，仅注释说明）。
     const { data } = await api.get('/api/orders')
     list.value = data
   } finally {

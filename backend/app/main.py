@@ -16,6 +16,12 @@ from .routers import admin as admin_router
 
 app = FastAPI(title="Online Bookstore API", version="1.0")
 
+# =========================
+# Requirements Traceability
+# =========================
+# A2: Product browsing/search is public; cart/orders require login (enforced by routers via dependencies).
+# B1/A16: Product photos are uploaded locally and served as static files under /uploads.
+
 # 静态文件：本地上传的商品图片（B1/A16）
 UPLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)

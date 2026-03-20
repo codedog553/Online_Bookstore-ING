@@ -55,6 +55,18 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { formatOptionValues, pickProductText } from '../utils/productI18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A2: 购物车页必须登录后访问（路由 requiresAuth）。购物车数据存服务端，跨会话持久化。
+// A8: 购物车列表展示商品名/单价/数量/小计，并展示总金额。
+// A9: 支持修改购买数量。
+// A10: 支持移除购物车项。
+// A8: 点击商品名可跳回商品详情页。
+// D3: 购物车项以 SKU 为单位，因此同一本书不同版本可同时存在。
+// D5: 缺货/不可售项在购物车中做醒目提示，并禁用结算。
+// W2: 商品标题/配置值按语言规则显示（pickProductText/formatOptionValues）。
+
 interface CartItem {
   id:number
   sku_id:number
@@ -135,6 +147,7 @@ function outOfStockText(row: CartItem): string {
 }
 
 const canCheckout = computed(() => {
+  // D5: 购物车中存在缺货/不可售，则禁止进入结算。
   if (!items.value.length) return false
   return items.value.every(isRowPurchasable)
 })

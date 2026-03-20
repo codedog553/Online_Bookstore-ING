@@ -80,6 +80,17 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { fallbackVersionToEnglish, getOptionValueI18n, pickProductText, translateOptionValue } from '../utils/productI18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A2: 商品详情页允许未登录访问；但“加入购物车”调用 /api/cart 会在未登录时被后端拒绝并提示。
+// A6: 展示商品详情的额外属性（作者/出版方/描述等）。
+// A7: 支持加入购物车（默认 qty=1）。
+// B1: 多图展示：图片来自每个 SKU 的 photos 列表（本地上传）。
+// D1/D2: 可配置商品：必须选择每个 option 才能匹配到 SKU。
+// D4/D5: SKU 有库存与可售状态；缺货/不可售时禁止加入购物车并提示。
+// W2: 商品信息双语字段按规则显示（pickProductText/translateOptionValue）。
+
 interface SKU { id:number; option_values:string; price_adjustment:number; stock_quantity:number; is_available:boolean }
 interface Product {
   id:number
@@ -169,6 +180,7 @@ const avgRating = computed(() => {
 })
 
 const canAddToCart = computed(() => {
+  // D5: 缺货/不可售 SKU 不可加入购物车。
   if (!matchedSku.value) return false
   if (!matchedSku.value.is_available) return false
   if (matchedSku.value.stock_quantity !== null && matchedSku.value.stock_quantity < 1) return false
@@ -229,6 +241,7 @@ async function load() {
 }
 
 async function addToCart() {
+  // A7/D2: 加购必须是“已选中配置后的 SKU”。
   if (!matchedSku.value) {
     ElMessage.warning(t('product.selectConfig'))
     return

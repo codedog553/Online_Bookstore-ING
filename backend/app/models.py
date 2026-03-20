@@ -4,12 +4,23 @@ from sqlalchemy.orm import relationship
 from .db import Base
 
 
+# 需求标注总览（本文件主要负责数据结构层）
+# - A1：用户注册时写入首个收货地址，并把它作为默认/上一次地址。
+# - A13：订单需要保留下单时的收货地址快照，避免后续改地址影响历史订单。
+# - B1：商品多图按 SKU 维度存储，支持一个版本对应多张图片。
+# - B2/B4：订单既保存当前状态，也保存状态时间线事件。
+# - D1/D4/D5：可配置商品通过 Product + ProductSKU + 库存字段实现。
+# - W2：商品信息保存中英双语字段，供前端按语言规则展示。
+
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
+    # A1：系统在业务上只记忆“上一次填写的地址”，
+    # 这里用 default_address_id 指向当前用户最近一次用于结算预填的地址记录。
     default_address_id = Column(Integer, ForeignKey("addresses.id"), nullable=True)
     language = Column(String(5), default="zh")
     is_admin = Column(Boolean, default=False)
@@ -27,6 +38,8 @@ class Address(Base):
     __tablename__ = "addresses"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # A1/A11：虽然产品要求前端主流程“不维护地址列表”，
+    # 但底层仍复用地址表做持久化，以降低实现复杂度并兼容旧逻辑。
     receiver_name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=True)
     province = Column(String(50), nullable=False)
@@ -59,11 +72,12 @@ class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
-    # 商品信息国际化：仅要求支持中文(默认)与英文
+    # W2：商品业务信息要求录入简体中文与英文两套文本。
+    # 前端再根据当前语言决定显示中文还是英文。
     title_en = Column(String(200), nullable=True)
     author = Column(String(100), nullable=True)
     author_en = Column(String(100), nullable=True)
-    # 出版方（A6 + W2）：中英双语
+    # A6/W2：作者、出版方属于商品详情中的额外属性，也要求中英双语。
     publisher = Column(String(200), nullable=True)
     publisher_en = Column(String(200), nullable=True)
     base_price = Column(Numeric(10, 2), nullable=False)
@@ -74,6 +88,8 @@ class Product(Base):
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     images = Column(Text, nullable=True)  # JSON string list
+    # D1：商品级 options 保存“有哪些可选项、每个可选项有哪些值”。
+    # 例如：{"版本": ["普通", "精装"]}
     options = Column(Text, nullable=True)  # JSON string dict
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -87,11 +103,15 @@ class ProductSKU(Base):
     __tablename__ = "product_skus"
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    # D1/D4：每个 SKU 对应一种确定的配置组合；
+    # 因此不同版本/配置会拥有独立库存、独立可售状态。
     option_values = Column(Text, nullable=False)  # JSON string dict
     price_adjustment = Column(Numeric(10, 2), default=0)
+    # D4/D5：库存按 SKU 维度维护，而不是按商品维度统一维护。
     stock_quantity = Column(Integer, default=0)
     is_available = Column(Boolean, default=True)
-    # SKU 维度图片（B1/A16/D2）：JSON string list，存储相对静态路径（例如："/uploads/sku_12/a.jpg"）
+    # B1/A16/D2：图片也按 SKU 维度保存。
+    # 这样前端在用户选择不同版本时，可以切换到该版本对应的图片组。
     photos = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -106,6 +126,7 @@ class CartItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     sku_id = Column(Integer, ForeignKey("product_skus.id"), nullable=False)
+    # A7/D3：购物车项绑定到 SKU，因此同一本书的不同版本会作为不同购物车项存在。
     quantity = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -118,8 +139,11 @@ class Order(Base):
     __tablename__ = "orders"
     order_id = Column(String(20), primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # address_id 仍然保留到地址表的关联，便于复用已有地址数据；
+    # 但历史订单展示不能只依赖这条关联，因为地址可能被用户后续修改。
     address_id = Column(Integer, ForeignKey("addresses.id"), nullable=False)
-    # 订单下单时的地址快照（A13）：避免用户后续修改 last address 影响历史订单展示。
+    # A13：订单下单时的地址快照。
+    # 这样即使用户之后修改了“上一次地址”，历史订单仍显示下单当时的真实地址信息。
     ship_receiver_name = Column(String(100), nullable=True)
     ship_phone = Column(String(20), nullable=True)
     ship_province = Column(String(50), nullable=True)
@@ -127,7 +151,9 @@ class Order(Base):
     ship_district = Column(String(50), nullable=True)
     ship_detail_address = Column(String(255), nullable=True)
     total_amount = Column(Numeric(10, 2), nullable=False)
+    # B2：订单当前状态，用于列表过滤与业务流转判断。
     status = Column(String(20), default="pending")  # pending, shipped, cancelled, completed
+    # B4：常用状态时间点做冗余落库，便于详情页直接展示。
     shipped_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
@@ -145,6 +171,10 @@ class OrderStatusEvent(Base):
     """订单状态时间线事件（B4）。
 
     说明：每次状态变化都追加一条事件记录，用于前端展示 timeline。
+
+    这里与 orders.status / shipped_at / completed_at / cancelled_at 并存：
+    - orders.status：表示“当前状态”，便于筛选与快速判断；
+    - order_status_events：表示“历史轨迹”，便于详情页展示完整时间线。
     """
 
     __tablename__ = "order_status_events"
@@ -164,6 +194,8 @@ class OrderItem(Base):
     sku_id = Column(Integer, ForeignKey("product_skus.id"), nullable=False)
     quantity = Column(Integer, nullable=False)
     unit_price = Column(Numeric(10, 2), nullable=False)
+    # A13/D3：订单项需要记录下单时对应 SKU 的配置快照，
+    # 避免商品配置名称或结构变动后影响历史订单展示。
     option_values = Column(Text, nullable=False)  # JSON string dict snapshot
 
     order = relationship("Order", back_populates="items", foreign_keys=[order_id])

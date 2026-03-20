@@ -41,6 +41,15 @@ import { useI18n } from 'vue-i18n'
 import { pickProductText } from '../utils/productI18n'
 import { resolveBackendUrl } from '../utils/resolveUrl'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A2: 本页商品列表允许未登录访问（路由不要求 requiresAuth）。
+// A3: 商品列表展示：书名/价格/缩略图。
+// A4: 支持按书名关键字搜索（keyword）。
+// A5: 使用分页组件导航长列表（后端 page/size/total）。
+// W2: 商品信息双语字段（title/title_en）按语言规则显示（pickProductText）。
+
 interface Product {
   id:number
   title:string
@@ -73,6 +82,7 @@ function productThumb(p: Product) {
 }
 
 async function load(){
+  // A5: 通过分页参数请求后端，返回 items + total。
   const params:any = { page: page.value, size: size.value }
   if (keyword.value) params.keyword = keyword.value
   const { data } = await api.get('/api/products', { params })

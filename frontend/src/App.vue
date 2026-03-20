@@ -68,6 +68,12 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from './store/auth'
 import { useI18n } from 'vue-i18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// W1: 所有“非商品信息”的多语言文案来自 i18n json（zh/en/ja/zh-TW），并提供语言切换按钮。
+// A2: 登录后能力（cart/orders/admin）入口在顶部菜单中，未登录仅显示 login/register。
+
 const router = useRouter()
 const auth = useAuthStore()
 const keyword = ref('')

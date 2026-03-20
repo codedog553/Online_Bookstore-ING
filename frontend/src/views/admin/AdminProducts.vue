@@ -171,6 +171,18 @@ import { extractErrorMessage } from '../../api/error'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A14: vendor/admin 可浏览/搜索商品目录。
+// A15: 支持按商品 ID 子串搜索（后端 /api/admin/products?q=... 同时匹配 id/title/title_en）。
+// A16: 可新增商品（包含中英双语字段）；图片按 SKU 维度本地上传、可多张。
+// A17: 可编辑商品详情。
+// A18: 可上架/下架（is_active）。
+// B1: 管理端允许对 SKU 上传/删除多张图片。
+// D1/D4: 商品 options 定义可配置商品；不同配置作为不同 SKU 独立维护库存/可售。
+// W2: 新建/编辑商品时强制填写中英双语信息（前端校验 + 后端 schema 校验）。
+
 interface Product {
   id:number
   title:string

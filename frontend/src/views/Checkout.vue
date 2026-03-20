@@ -53,6 +53,16 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { formatOptionValues } from '../utils/productI18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A2: 结算页必须登录（路由 requiresAuth）。
+// A1: 系统只记忆“上一次填写的地址”；注册时填的地址会成为第一次下单默认地址。
+// A11: 结算会创建订单并清空购物车（后端 /api/orders 实现）。
+// A8: 展示购物车行项目与总金额。
+// D5: 若购物车中有缺货/不可售项，则醒目提示并禁止下单。
+// W2: 配置值的展示遵循商品双语规则（formatOptionValues）。
+
 interface CartItem {
   id:number
   sku_id:number
@@ -97,7 +107,7 @@ const canPlace = computed(() => {
 })
 
 async function load(){
-  // 预填“上一次地址”
+  // A1: 预填“上一次地址”（last address）。
   try {
     const { data } = await api.get('/api/addresses/last')
     addr.value.receiver_name = data.receiver_name || ''
@@ -114,6 +124,7 @@ async function load(){
 }
 
 async function saveLastAddress(){
+  // A1/A11: 更新 last address，供下一次结算自动预填。
   savingAddress.value = true
   try {
     await api.put('/api/addresses/last', addr.value)
@@ -126,6 +137,7 @@ async function saveLastAddress(){
 }
 
 async function placeOrder(){
+  // A11: 下单成功后，后端会清空购物车。
   if (!canPlace.value) return
   placing.value = true
   try {

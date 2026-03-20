@@ -8,6 +8,18 @@ from ..db import get_db
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
+# =========================
+# Requirements Traceability
+# =========================
+# A2: Product search & detail are accessible before login (no auth dependency here).
+# A3: Product list shows basic info (name/price/thumbnail).
+# A4: Search by product name.
+# A5: Pagination support for long lists.
+# A6: Detail includes additional attributes (author/publisher/etc.).
+# B1: Multi-photos per SKU; detail page uses per-SKU photos mapping.
+# D2: For configurable products, customers select option values; photos can differentiate options.
+# W2: Product text is stored bilingual (zh/en); backend returns both fields, frontend picks by locale rule.
+
 
 def _first_image_from_json_list(s: Optional[str]) -> Optional[str]:
     if not s:
@@ -48,10 +60,13 @@ def list_products(
     category: Optional[int] = None,
     keyword: Optional[str] = None,
 ):
+    # A2: Public endpoint (no login required).
+    # A5: Server-side pagination via page/size/total.
     q = db.query(models.Product).filter(models.Product.is_active == True)  # noqa: E712
     if category:
         q = q.filter(models.Product.category_id == category)
     if keyword:
+        # A4/W2: Search by name supports both zh title and en title_en.
         like = f"%{keyword}%"
         q = q.filter(or_(models.Product.title.like(like), models.Product.title_en.like(like)))
 
@@ -69,6 +84,8 @@ def list_products(
 
 @router.get("/{product_id}", response_model=schemas.ProductDetail)
 def get_product(product_id: int, db: Session = Depends(get_db)):
+    # A2: Public endpoint (no login required).
+    # A6: Detail returns more attributes via ProductDetail schema (includes skus list).
     product = db.query(models.Product).filter(models.Product.id == product_id, models.Product.is_active == True).first()  # noqa: E712
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在或已下架")
@@ -95,6 +112,9 @@ def list_product_photos(product_id: int, db: Session = Depends(get_db)):
 
     其中 option_images：只做一个弱约定：对每个 SKU 的 option_values，取第一个 key/value，映射到该 SKU 的第一张图。
     """
+
+    # B1: Multi-photos are stored per SKU (ProductSKU.photos as JSON list).
+    # D2: Frontend can use by_sku to switch carousel images when option selection changes.
 
     import json
 
@@ -130,6 +150,7 @@ def list_product_photos(product_id: int, db: Session = Depends(get_db)):
 
 @router.get("/search", response_model=List[schemas.ProductOut])
 def search_products(q: str, db: Session = Depends(get_db)):
+    # A2/A4: Public search endpoint (legacy/simple). Frontend currently uses GET /api/products?keyword=
     like = f"%{q}%"
     items = (
         db.query(models.Product)

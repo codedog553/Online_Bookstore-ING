@@ -14,6 +14,22 @@ from ..deps import get_current_admin
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
+# =========================
+# Requirements Traceability
+# =========================
+# A14: Vendor can browse/search products.
+# A15: Vendor can search by product ID substring (system-generated unique product ID).
+# A16: Vendor can add new products; photos uploaded locally (per SKU) and multiple allowed.
+# A17: Vendor can edit product detail information.
+# A18: Vendor can disable/enable products (is_active) to hide from customers.
+# A19: Vendor can list purchase orders (newest first) incl. PO number/date/customer/amount/status.
+# A20: Vendor can view purchase order detail and line items.
+# B1: Multi-photos per SKU; admin portal can add/remove photos.
+# B2/B4: Vendor triggers order status changes (ship/cancel) and timeline is recorded.
+# D1/D4: Configurable products + SKU separation + inventory (stock_quantity/is_available).
+# D5: Unavailable/out-of-stock SKUs should not be purchasable (enforced in cart/order routes; admin sets inventory here).
+# W2: Vendor must input bilingual product information at creation/update.
+
 
 def _uploads_dir() -> str:
     """后端 uploads 根目录（与 main.py 中保持一致）。"""
@@ -177,6 +193,9 @@ def upload_sku_photos(
     - sku.photos 存储 JSON string list，元素为可直接访问的静态路径（/uploads/...）
     """
 
+    # B1/A16：这里实现“每个 SKU 可上传多张图片”的核心能力。
+    #           图片保存在 backend/app/uploads/sku_{id}/ 下，并通过 FastAPI StaticFiles 暴露为 /uploads/...（见 main.py）。
+
     sku = db.query(models.ProductSKU).filter(models.ProductSKU.id == sku_id).first()
     if not sku:
         raise HTTPException(status_code=404, detail="SKU 不存在")
@@ -247,6 +266,8 @@ def delete_sku_photo(
 
 @router.post("/products", response_model=schemas.ProductOut)
 def create_product(payload: schemas.AdminProductCreate, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    # A16/W2：新建商品必须输入中英双语字段（schemas.AdminProductCreate 已强约束）。
+    # D1：options 字段用于定义 configurable product 的可选项和值。
     prod = models.Product(
         title=payload.title,
         title_en=payload.title_en,
@@ -286,6 +307,7 @@ def create_product(payload: schemas.AdminProductCreate, db: Session = Depends(ge
 
 @router.put("/products/{product_id}", response_model=schemas.ProductOut)
 def update_product(product_id: int, payload: schemas.AdminProductUpdate, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    # A17/A18/W2：编辑商品信息/上架下架（is_active）。
     prod = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not prod:
         raise HTTPException(status_code=404, detail="商品不存在")
@@ -300,6 +322,8 @@ def update_product(product_id: int, payload: schemas.AdminProductUpdate, db: Ses
 
 @router.get("/products", response_model=List[schemas.ProductOut])
 def list_all_products(db: Session = Depends(get_db), admin=Depends(get_current_admin), q: Optional[str] = Query(None)):
+    # A14：管理端商品目录列表 + 搜索。
+    # A15：支持按商品 ID 子串搜索（cast(Product.id, String).like）。
     query = db.query(models.Product)
     if q:
         like = f"%{q}%"
@@ -314,6 +338,7 @@ def list_all_products(db: Session = Depends(get_db), admin=Depends(get_current_a
 
 @router.get("/orders", response_model=List[schemas.AdminOrderListOut])
 def admin_list_orders(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    # A19：管理端订单列表（含 customer_name），按 created_at 倒序。
     _auto_cancel_expired_orders(db)
     rows = (
         db.query(models.Order, models.User.full_name.label("customer_name"))
@@ -336,7 +361,11 @@ def admin_list_orders(db: Session = Depends(get_db), admin=Depends(get_current_a
 
 @router.get("/orders/{order_id}", response_model=schemas.OrderOut)
 def admin_get_order(order_id: str, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
-    """管理端订单详情（A20）。"""
+    """管理端订单详情（A20）。
+
+    A20：点击订单可查看订单详情与行项目；
+    A13/B4：同样展示地址快照与状态时间线。
+    """
 
     _auto_cancel_expired_orders(db)
     od = db.query(models.Order).filter(models.Order.order_id == order_id).first()
@@ -386,6 +415,7 @@ def admin_get_order(order_id: str, db: Session = Depends(get_db), admin=Depends(
 
 @router.post("/orders/{order_id}/ship", response_model=schemas.Msg)
 def mark_shipped(order_id: str, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+    # B2/B4：vendor ship 操作触发 pending -> shipped，并写入 shipped 时间线事件。
     _auto_cancel_expired_orders(db)
     od = db.query(models.Order).filter(models.Order.order_id == order_id).first()
     if not od:

@@ -85,6 +85,14 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { formatOptionValues, pickProductText } from '../../utils/productI18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A20: vendor/admin 可查看订单详情与行项目。
+// A13: 订单详情包含收货地址快照（下单时复制）与商品行项目小计。
+// B2/B4: vendor 可对 pending 订单发货/取消；状态时间线用于展示状态与时间点。
+// W2: 行项目商品标题/配置值按语言规则显示。
+
 interface OrderStatusEvent { id:number; status:string; note?:string|null; created_at:string }
 interface ShippingAddress { receiver_name:string; phone?:string|null; province:string; city:string; district:string; detail_address:string }
 interface OrderItem {
@@ -143,6 +151,7 @@ async function load(){
 }
 
 async function ship(){
+  // B2: pending -> shipped（vendor 发货）。
   if (!order.value) return
   try {
     await api.post(`/api/admin/orders/${order.value.order_id}/ship`)
@@ -154,6 +163,7 @@ async function ship(){
 }
 
 async function cancel(){
+  // B2: pending -> cancelled（vendor 取消）。
   if (!order.value) return
   try {
     await api.post(`/api/admin/orders/${order.value.order_id}/cancel`)

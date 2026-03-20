@@ -6,7 +6,15 @@ from .db import get_db
 from . import models
 
 
+# =========================
+# Requirements Traceability
+# =========================
+# A2: After login, customers can access cart/orders/etc. This dependency enforces JWT auth.
+# A14~A20: Admin routes are gated by get_current_admin.
+
+
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> models.User:
+    # A2: 所有“登录后能力”(cart/orders/addresses/reviews create/admin) 都依赖该认证。
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.lower().startswith("bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未认证")
@@ -22,6 +30,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> models.
 
 
 def get_current_admin(current_user: models.User = Depends(get_current_user)) -> models.User:
+    # A14~A20: vendor/admin portal requires admin role.
     if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
     return current_user

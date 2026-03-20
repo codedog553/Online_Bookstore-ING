@@ -72,6 +72,15 @@ import { useI18n } from 'vue-i18n'
 import { extractErrorMessage } from '../api/error'
 import { formatOptionValues, pickProductText } from '../utils/productI18n'
 
+// =========================
+// Requirements Traceability
+// =========================
+// A2: 订单详情页必须登录（路由 requiresAuth）。
+// A13: 展示订单详情：订单号/时间/状态/金额 + 收货地址快照 + 行项目（数量/单价/小计）。
+// B2: 客户可取消 pending 订单；可在 shipped 状态确认收货（shipped->completed）。
+// B4: 展示订单状态时间线（timeline）。
+// W2: 行项目商品标题/配置值按语言规则显示。
+
 interface OrderStatusEvent { id:number; status:string; note?:string|null; created_at:string }
 interface ShippingAddress { receiver_name:string; phone?:string|null; province:string; city:string; district:string; detail_address:string }
 interface OrderItem {
@@ -125,6 +134,7 @@ async function load(){
 }
 
 async function cancel(){
+  // B2: pending -> cancelled（客户取消）。
   if (!order.value) return
   try{
     await api.post(`/api/orders/${order.value.order_id}/cancel`)
@@ -136,6 +146,7 @@ async function cancel(){
 }
 
 async function complete(){
+  // B2: shipped -> completed（客户确认收货）。
   if (!order.value) return
   try {
     await api.post(`/api/orders/${order.value.order_id}/complete`)
