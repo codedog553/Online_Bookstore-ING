@@ -43,8 +43,18 @@ conda activate Qchat
 cd backend
 pip install -r requirements.txt
 
-:: （可选）重置/初始化示例数据（会清库重建）
+:: 重置/初始化示例数据（会清库重建）
+:: 注意：该命令会：
+:: 1) 清空数据库所有业务表数据（包括订单状态时间线 B4，避免重复）；
+:: 2) 清空本地上传目录 backend/app/uploads（包括你手动上传的图片）。
+:: 默认会生成 60 个商品，便于前端分页演示（A5，size=20 -> 至少 3 页）。
 python -m app.seed
+
+:: （可选）如需生成更多商品（例如 120 个），可通过环境变量调整：
+:: 注意：再次运行仍然会“清库重建 + 清空 uploads”。
+set SEED_PRODUCT_COUNT=120
+python -m app.seed
+set SEED_PRODUCT_COUNT=
 
 :: 启动后端
 uvicorn app.main:app --reload --port 8001
