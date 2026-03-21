@@ -2,7 +2,11 @@
   <div v-if="product">
     <el-row :gutter="20">
       <el-col :span="10">
-        <ImageCarousel :images="carouselImages" :alt="pickText(product.title, product.title_en)" />
+        <ProductImageGallery
+          :photos-by-sku="photosBySku"
+          :selected-sku-id="matchedSku ? matchedSku.id : null"
+          :alt="pickText(product.title, product.title_en)"
+        />
       </el-col>
       <el-col :span="14">
         <h2>{{ pickText(product.title, product.title_en) }}</h2>
@@ -74,7 +78,7 @@
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api/http'
-import ImageCarousel from '../components/ImageCarousel.vue'
+import ProductImageGallery from '../components/ProductImageGallery.vue'
 import { extractErrorMessage } from '../api/error'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -187,24 +191,6 @@ const canAddToCart = computed(() => {
   return true
 })
 const photosBySku = ref<Record<string, string[]>>({})
-
-const carouselImages = computed(() => {
-  // B1: show selected SKU's photos if available; else fallback to ANY sku photos
-  const skuId = matchedSku.value?.id
-  if (skuId != null) {
-    const list = photosBySku.value?.[String(skuId)]
-    if (Array.isArray(list) && list.length) return list
-  }
-  // fallback to first available sku photos
-  try {
-    const bySku = photosBySku.value || {}
-    for (const k of Object.keys(bySku)) {
-      const list = bySku[k]
-      if (Array.isArray(list) && list.length) return list
-    }
-  } catch {}
-  return null
-})
 
 async function load() {
   const id = Number(route.params.id)
