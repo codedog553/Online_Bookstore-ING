@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..db import get_db
 from ..deps import get_current_user
+from ..time_utils import now_cn_naive, cn_today_ymd
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -55,7 +56,8 @@ def _auto_cancel_expired_orders(db: Session) -> int:
     设计说明：课程项目不引入后台 scheduler，这里采用“访问接口时触发扫描”。
     """
 
-    expired_before = datetime.utcnow() - timedelta(days=3)
+    # B2：自动取消以中国大陆时间（UTC+8）为基准判断。
+    expired_before = now_cn_naive() - timedelta(days=3)
     expired_orders = (
         db.query(models.Order)
         .filter(models.Order.status == "pending")
@@ -68,7 +70,7 @@ def _auto_cancel_expired_orders(db: Session) -> int:
     for od in expired_orders:
         _restore_inventory_for_order(db, od)
         od.status = "cancelled"
-        od.cancelled_at = datetime.utcnow()
+        od.cancelled_at = now_cn_naive()
         db.add(od)
         _append_status_event(db, od.order_id, "cancelled", note="auto-cancel: vendor not shipped within 3 days")
 
@@ -150,7 +152,8 @@ def _upsert_last_address(
 
 
 def _generate_order_id(db: Session) -> str:
-    today = datetime.utcnow().strftime("%Y%m%d")
+    # 订单号日期以中国大陆日期为准（UTC+8），避免 UTC 日期与本地日期错位。
+    today = cn_today_ymd()
     prefix = f"ORDER{today}-"
     # 统计当日已有订单数量
     count = db.query(models.Order).filter(models.Order.order_id.like(prefix + "%")).count()
@@ -403,7 +406,7 @@ def cancel_order(order_id: str, db: Session = Depends(get_db), current_user: mod
 
     _restore_inventory_for_order(db, od)
     od.status = "cancelled"
-    od.cancelled_at = datetime.utcnow()
+    od.cancelled_at = now_cn_naive()
     db.add(od)
     _append_status_event(db, od.order_id, "cancelled", note="cancelled by customer")
     db.commit()
@@ -426,7 +429,7 @@ def complete_order(order_id: str, db: Session = Depends(get_db), current_user: m
         raise HTTPException(status_code=400, detail="仅已发货订单可确认收货")
 
     od.status = "completed"
-    od.completed_at = datetime.utcnow()
+    od.completed_at = now_cn_naive()
     db.add(od)
     _append_status_event(db, od.order_id, "completed", note="confirmed by customer")
     db.commit()

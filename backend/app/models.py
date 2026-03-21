@@ -3,6 +3,8 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime, Bool
 from sqlalchemy.orm import relationship
 from .db import Base
 
+from .time_utils import now_cn_naive
+
 
 # 需求标注总览（本文件主要负责数据结构层）
 # - A1：用户注册时写入首个收货地址，并把它作为默认/上一次地址。
@@ -24,8 +26,9 @@ class User(Base):
     default_address_id = Column(Integer, ForeignKey("addresses.id"), nullable=True)
     language = Column(String(5), default="zh")
     is_admin = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # 注意：统一使用中国大陆时间（UTC+8）的 naive datetime（见 time_utils.py）
+    created_at = Column(DateTime, default=now_cn_naive)
+    updated_at = Column(DateTime, default=now_cn_naive, onupdate=now_cn_naive)
 
     addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan", foreign_keys="Address.user_id")
     cart_items = relationship("CartItem", back_populates="user", cascade="all, delete-orphan")
@@ -47,8 +50,8 @@ class Address(Base):
     district = Column(String(50), nullable=False)
     detail_address = Column(String(255), nullable=False)
     is_default = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_cn_naive)
+    updated_at = Column(DateTime, default=now_cn_naive, onupdate=now_cn_naive)
 
     user = relationship("User", back_populates="addresses", foreign_keys=[user_id])
     orders = relationship("Order", back_populates="address", foreign_keys="Order.address_id")
@@ -61,8 +64,8 @@ class Category(Base):
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     sort_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_cn_naive)
+    updated_at = Column(DateTime, default=now_cn_naive, onupdate=now_cn_naive)
 
     children = relationship("Category", remote_side=[id])
     products = relationship("Product", back_populates="category")
@@ -91,8 +94,8 @@ class Product(Base):
     # D1：商品级 options 保存“有哪些可选项、每个可选项有哪些值”。
     # 例如：{"版本": ["普通", "精装"]}
     options = Column(Text, nullable=True)  # JSON string dict
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_cn_naive)
+    updated_at = Column(DateTime, default=now_cn_naive, onupdate=now_cn_naive)
 
     category = relationship("Category", back_populates="products")
     skus = relationship("ProductSKU", back_populates="product", cascade="all, delete-orphan")
@@ -113,8 +116,8 @@ class ProductSKU(Base):
     # B1/A16/D2：图片也按 SKU 维度保存。
     # 这样前端在用户选择不同版本时，可以切换到该版本对应的图片组。
     photos = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_cn_naive)
+    updated_at = Column(DateTime, default=now_cn_naive, onupdate=now_cn_naive)
 
     product = relationship("Product", back_populates="skus")
     cart_items = relationship("CartItem", back_populates="sku")
@@ -128,8 +131,8 @@ class CartItem(Base):
     sku_id = Column(Integer, ForeignKey("product_skus.id"), nullable=False)
     # A7/D3：购物车项绑定到 SKU，因此同一本书的不同版本会作为不同购物车项存在。
     quantity = Column(Integer, default=1)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_cn_naive)
+    updated_at = Column(DateTime, default=now_cn_naive, onupdate=now_cn_naive)
 
     user = relationship("User", back_populates="cart_items")
     sku = relationship("ProductSKU", back_populates="cart_items")
@@ -157,8 +160,8 @@ class Order(Base):
     shipped_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=now_cn_naive)
+    updated_at = Column(DateTime, default=now_cn_naive, onupdate=now_cn_naive)
 
     user = relationship("User", back_populates="orders", foreign_keys=[user_id])
     address = relationship("Address", back_populates="orders", foreign_keys=[address_id])
@@ -182,7 +185,7 @@ class OrderStatusEvent(Base):
     order_id = Column(String(20), ForeignKey("orders.order_id"), nullable=False, index=True)
     status = Column(String(20), nullable=False)
     note = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_cn_naive)
 
     order = relationship("Order", back_populates="status_events", foreign_keys=[order_id])
 
@@ -211,7 +214,7 @@ class Review(Base):
     rating = Column(Integer, nullable=False)
     comment = Column(Text, nullable=True)
     is_visible = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_cn_naive)
 
     user = relationship("User", back_populates="reviews", foreign_keys=[user_id])
     product = relationship("Product", back_populates="reviews", foreign_keys=[product_id])

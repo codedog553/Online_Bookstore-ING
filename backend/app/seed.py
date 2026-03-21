@@ -25,6 +25,8 @@ import os
 import uuid
 from datetime import datetime, timedelta
 
+from .time_utils import now_cn_naive
+
 
 def reset_all(db: Session):
     # =========================
@@ -219,7 +221,8 @@ def create_demo_order_and_review(db: Session, user: models.User, product: models
     unit_price = float(product.base_price) + float(sku.price_adjustment or 0)
 
     # 订单 + 时间线（B4）：演示 pending -> shipped -> completed
-    created_at = datetime.utcnow() - timedelta(days=1)
+    # 注意：所有时间使用中国大陆时间（UTC+8）。
+    created_at = now_cn_naive() - timedelta(days=1)
     shipped_at = created_at + timedelta(hours=4)
     completed_at = shipped_at + timedelta(hours=6)
 

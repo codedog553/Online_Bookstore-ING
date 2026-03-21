@@ -11,6 +11,7 @@ from sqlalchemy import func, cast, String
 from .. import models, schemas
 from ..db import get_db
 from ..deps import get_current_admin
+from ..time_utils import now_cn_naive
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -84,7 +85,8 @@ def _auto_cancel_expired_orders(db: Session) -> int:
     说明：课程项目不引入后台 scheduler，这里采用“访问接口时触发扫描”。
     """
 
-    expired_before = datetime.utcnow() - timedelta(days=3)
+    # B2：自动取消以中国大陆时间（UTC+8）为基准判断。
+    expired_before = now_cn_naive() - timedelta(days=3)
     expired_orders = (
         db.query(models.Order)
         .filter(models.Order.status == "pending")
@@ -97,7 +99,7 @@ def _auto_cancel_expired_orders(db: Session) -> int:
     for od in expired_orders:
         _restore_inventory_for_order(db, od)
         od.status = "cancelled"
-        od.cancelled_at = datetime.utcnow()
+        od.cancelled_at = now_cn_naive()
         db.add(od)
         _append_status_event(db, od.order_id, "cancelled", note="auto-cancel: vendor not shipped within 3 days")
 
@@ -423,7 +425,7 @@ def mark_shipped(order_id: str, db: Session = Depends(get_db), admin=Depends(get
     if od.status != "pending":
         raise HTTPException(status_code=400, detail="仅待处理订单可发货")
     od.status = "shipped"
-    od.shipped_at = datetime.utcnow()
+    od.shipped_at = now_cn_naive()
     db.add(od)
     _append_status_event(db, od.order_id, "shipped", note="shipped by vendor")
     db.commit()
@@ -443,7 +445,7 @@ def admin_cancel_order(order_id: str, db: Session = Depends(get_db), admin=Depen
 
     _restore_inventory_for_order(db, od)
     od.status = "cancelled"
-    od.cancelled_at = datetime.utcnow()
+    od.cancelled_at = now_cn_naive()
     db.add(od)
     _append_status_event(db, od.order_id, "cancelled", note="cancelled by vendor")
     db.commit()
@@ -573,12 +575,13 @@ def sales_report(
     if start:
         start_d = _parse_ymd(start)
     else:
-        start_d = (datetime.utcnow().date() - timedelta(days=29))
+        # 报表默认时间范围按中国大陆日期（UTC+8）。
+        start_d = (now_cn_naive().date() - timedelta(days=29))
 
     if end:
         end_d = _parse_ymd(end)
     else:
-        end_d = datetime.utcnow().date()
+        end_d = now_cn_naive().date()
 
     if end_d < start_d:
         raise HTTPException(status_code=400, detail="end 不能早于 start")
