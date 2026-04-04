@@ -1,0 +1,206 @@
+{
+  "common": {
+    "cancel": "取消",
+    "close": "關閉"
+  },
+  "lang": {
+    "zh": "簡體中文",
+    "zhTW": "繁體中文",
+    "en": "English",
+    "ja": "日本語",
+    "short": {
+      "zh": "簡中",
+      "zhTW": "繁中",
+      "en": "EN",
+      "ja": "日本語"
+    }
+  },
+  "app": {
+    "title": "線上書店",
+    "language": "語言",
+    "user": "使用者",
+    "search": "搜尋",
+    "searchPlaceholder": "搜尋書名",
+    "login": "登入",
+    "register": "註冊",
+    "logout": "登出",
+    "cart": "購物車",
+    "myOrders": "我的訂單",
+    "adminProducts": "後台-商品",
+    "adminOrders": "後台-訂單",
+    "adminReviews": "後台-評論",
+    "adminReports": "後台-報表"
+  },
+  "auth": {
+    "email": "電子郵件",
+    "password": "密碼",
+    "fullName": "姓名",
+    "loginTitle": "登入",
+    "registerTitle": "註冊",
+    "confirm": "確認",
+    "toRegister": "去註冊",
+    "toLogin": "去登入",
+    "passwordHint": "至少 8 位，且包含字母與數字"
+  },
+  "product": {
+    "price": "價格",
+    "version": "版本",
+    "paperback": "平裝",
+    "hardcover": "精裝",
+    "addToCart": "加入購物車",
+    "addedToCart": "已加入購物車",
+    "selectConfig": "請選擇完整配置",
+    "author": "作者",
+    "publisher": "出版方",
+    "publisherEn": "出版方(英文)",
+    "quantity": "數量",
+    "stock": "庫存",
+    "outOfStock": "缺貨",
+    "select": "請選擇",
+    "description": "簡介",
+    "reviews": "評論",
+    "noReviews": "暫無評論",
+    "rating": "評分",
+    "comment": "評論內容",
+    "submit": "提交"
+  },
+  "cart": {
+    "title": "購物車",
+    "product": "商品",
+    "config": "配置",
+    "unitPrice": "單價",
+    "quantity": "數量",
+    "subtotal": "小計",
+    "total": "總計",
+    "update": "更新",
+    "remove": "刪除",
+    "checkout": "去結算",
+    "updateFailed": "更新失敗",
+    "removeFailed": "刪除失敗",
+    "outOfStockInCart": "購物車中有缺貨/不可售商品，請調整後再下單",
+    "unavailable": "不可售"
+  },
+  "order": {
+    "checkoutTitle": "結算",
+    "address": "收貨地址",
+    "receiverName": "收貨人",
+    "phone": "電話",
+    "province": "省",
+    "city": "市",
+    "district": "區縣",
+    "detailAddress": "詳細地址",
+    "saveAddress": "保存地址",
+    "placeOrder": "下單",
+    "placeOrderSuccess": "下單成功",
+    "placeOrderFailed": "下單失敗",
+    "orderOverview": "訂單概覽",
+    "status": "狀態",
+    "createdAt": "下單時間",
+    "detail": "訂單詳情",
+    "cancel": "取消訂單",
+    "cancelSuccess": "訂單已取消",
+    "cancelFailed": "取消失敗",
+    "shippedAt": "發貨時間",
+    "cancelledAt": "取消時間",
+    "completedAt": "完成時間",
+    "statusTimeline": "狀態時間線",
+    "confirmReceived": "確認收貨",
+    "confirmReceivedSuccess": "已確認收貨",
+    "confirmReceivedFailed": "確認收貨失敗",
+    "myOrdersTitle": "我的訂單",
+    "filterStatus": "篩選狀態",
+    "refresh": "刷新",
+    "orderId": "訂單號",
+    "amount": "金額"
+  },
+  "admin": {
+    "productsTitle": "後台 - 商品管理",
+    "ordersTitle": "後台 - 訂單管理",
+    "reviewsTitle": "後台 - 評論管理",
+    "reportsTitle": "後台 - 銷售報表",
+    "newProduct": "新增商品",
+    "editProduct": "編輯商品",
+    "search": "搜尋",
+    "keyword": "關鍵字",
+    "id": "ID",
+    "title": "書名",
+    "titleEn": "書名(英文)",
+    "author": "作者",
+    "authorEn": "作者(英文)",
+    "basePrice": "基礎價格",
+    "isActive": "是否上架",
+    "description": "描述",
+    "descriptionEn": "描述(英文)",
+    "imagesJson": "圖片(JSON)",
+    "optionsJson": "選項(JSON)",
+    "save": "保存",
+    "back": "返回",
+    "ship": "標記發貨",
+    "shipSuccess": "已標記發貨",
+    "shipFailed": "操作失敗（需要管理員登入）",
+    "cancelOrder": "取消訂單",
+    "cancelSuccess": "訂單已取消",
+    "cancelFailed": "取消失敗",
+    "customerName": "客戶",
+    "customerEmail": "客戶郵箱",
+    "orderDetailTitle": "訂單詳情",
+    "orderItemsTitle": "訂單商品",
+    "skuManage": "SKU管理",
+    "manageSku": "管理SKU",
+    "skuPhotos": "SKU 圖片",
+    "selectSkuTip": "請先點擊選擇一個 SKU 行，再管理圖片",
+    "uploadSkuPhotos": "上傳圖片",
+    "uploadSuccess": "上傳成功",
+    "uploadFailed": "上傳失敗",
+    "deleteSuccess": "刪除成功",
+    "noPhotos": "暫無圖片",
+    "optionValuesJson": "選項(JSON)",
+    "priceAdjustment": "加價",
+    "stockQuantity": "庫存",
+    "available": "可售",
+    "newSku": "新增 SKU",
+    "addSku": "添加 SKU",
+    "operations": "操作",
+    "delete": "刪除",
+    "visible": "顯示",
+    "hidden": "隱藏",
+    "reportRange": "時間範圍",
+    "granularity": "粒度",
+    "day": "按日",
+    "week": "按週",
+    "month": "按月",
+    "totalSales": "總銷售額",
+    "orderCount": "訂單數",
+    "bestSellers": "暢銷榜",
+    "salesTrend": "銷售趨勢"
+    ,"start": "開始日期"
+    ,"end": "結束日期"
+    ,"all": "全部"
+    ,"updated": "已更新"
+    ,"deleted": "已刪除"
+  }
+  ,"msg": {
+    "loginRequired": "請先登入",
+    "loginFailed": "登入失敗",
+    "noPermission": "沒有權限訪問該頁面"
+    ,"fillRequired": "請填寫必填欄位"
+    ,"invalidJson": "JSON 格式不正確"
+    ,"noImage": "無圖片"
+    ,"loading": "載入中..."
+    ,"noText": "（無文字）"
+    ,"saveFailed": "保存失敗"
+    ,"updateFailed": "更新失敗"
+    ,"deleteFailed": "刪除失敗"
+    ,"loadFailed": "載入失敗"
+    ,"registerFailed": "註冊失敗"
+    ,"addToCartFailed": "加入失敗（可能需要登入）"
+    ,"reviewFailed": "評論失敗（需購買後評論）"
+    ,"saveAddressSuccess": "地址已保存"
+  }
+  ,"status": {
+    "pending": "待處理",
+    "shipped": "已發貨",
+    "cancelled": "已取消",
+    "completed": "已完成"
+  }
+}

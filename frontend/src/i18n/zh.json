@@ -1,0 +1,210 @@
+{
+  "common": {
+    "cancel": "取消",
+    "close": "关闭"
+  },
+  "lang": {
+    "zh": "简体中文",
+    "zhTW": "繁體中文",
+    "en": "English",
+    "ja": "日本語",
+    "short": {
+      "zh": "简中",
+      "zhTW": "繁中",
+      "en": "EN",
+      "ja": "日本語"
+    }
+  },
+  "app": {
+    "title": "在线书店",
+    "language": "语言",
+    "user": "用户",
+    "search": "搜索",
+    "searchPlaceholder": "搜索书名",
+    "login": "登录",
+    "register": "注册",
+    "logout": "退出",
+    "cart": "购物车",
+    "myOrders": "我的订单",
+    "adminProducts": "后台-商品",
+    "adminOrders": "后台-订单",
+    "adminReviews": "后台-评论",
+    "adminReports": "后台-报表"
+  },
+  "auth": {
+    "email": "邮箱",
+    "password": "密码",
+    "fullName": "姓名",
+    "loginTitle": "登录",
+    "registerTitle": "注册",
+    "confirm": "确认",
+    "toRegister": "去注册",
+    "toLogin": "去登录",
+    "passwordHint": "至少 8 位，且包含字母与数字"
+  },
+  "product": {
+    "price": "价格",
+    "version": "版本",
+    "paperback": "平装",
+    "hardcover": "精装",
+    "addToCart": "加入购物车",
+    "addedToCart": "已加入购物车",
+    "selectConfig": "请选择完整配置",
+    "author": "作者",
+    "publisher": "出版方",
+    "publisherEn": "出版方(英文)",
+    "quantity": "数量",
+    "stock": "库存",
+    "outOfStock": "缺货",
+    "select": "请选择",
+    "description": "简介",
+    "reviews": "评论",
+    "noReviews": "暂无评论",
+    "rating": "评分",
+    "comment": "评论内容",
+    "submit": "提交"
+  },
+  "cart": {
+    "title": "购物车",
+    "product": "商品",
+    "config": "配置",
+    "unitPrice": "单价",
+    "quantity": "数量",
+    "subtotal": "小计",
+    "total": "总计",
+    "update": "更新",
+    "remove": "删除",
+    "checkout": "去结算",
+    "updateFailed": "更新失败",
+    "removeFailed": "删除失败",
+    "outOfStockInCart": "购物车中存在缺货/不可售商品，请调整后再下单",
+    "unavailable": "不可售"
+  },
+  "order": {
+    "checkoutTitle": "结算",
+    "address": "收货地址",
+    "receiverName": "收货人",
+    "phone": "电话",
+    "province": "省",
+    "city": "市",
+    "district": "区县",
+    "detailAddress": "详细地址",
+    "saveAddress": "保存地址",
+    "placeOrder": "下单",
+    "placeOrderSuccess": "下单成功",
+    "placeOrderFailed": "下单失败",
+    "orderOverview": "订单概览",
+    "status": "状态",
+    "createdAt": "下单时间",
+    "detail": "订单详情",
+    "cancel": "取消订单",
+    "cancelSuccess": "订单已取消",
+    "cancelFailed": "取消失败",
+    "shippedAt": "发货时间",
+    "cancelledAt": "取消时间",
+    "completedAt": "完成时间",
+    "statusTimeline": "状态时间线",
+    "confirmReceived": "确认收货",
+    "confirmReceivedSuccess": "已确认收货",
+    "confirmReceivedFailed": "确认收货失败",
+    "myOrdersTitle": "我的订单",
+    "filterStatus": "筛选状态",
+    "refresh": "刷新",
+    "orderId": "订单号",
+    "amount": "金额"
+  },
+  "admin": {
+    "productsTitle": "后台 - 商品管理",
+    "ordersTitle": "后台 - 订单管理",
+    "reviewsTitle": "后台 - 评论管理",
+    "reportsTitle": "后台 - 销售报表",
+    "newProduct": "新增商品",
+    "editProduct": "编辑商品",
+    "search": "搜索",
+    "keyword": "关键字",
+    "id": "ID",
+    "title": "书名",
+    "titleEn": "书名(英文)",
+    "author": "作者",
+    "authorEn": "作者(英文)",
+    "basePrice": "基础价格",
+    "isActive": "是否上架",
+    "description": "描述",
+    "descriptionEn": "描述(英文)",
+    "imagesJson": "图片(JSON)",
+    "imagesJsonHint": "例如 [\"https://...\",\"https://...\"]（可留空）",
+    "optionsJson": "选项(JSON)",
+    "optionsJsonHint": "例如 {\"version\":[\"平装\",\"精装\"],\"optionValueI18n\":{\"version\":{\"平装\":\"Paperback\",\"精装\":\"Hardcover\"}}}",
+    "save": "保存",
+    "back": "返回",
+    "ship": "标记发货",
+    "shipSuccess": "已标记发货",
+    "shipFailed": "操作失败（需要管理员登录）",
+    "cancelOrder": "取消订单",
+    "cancelSuccess": "订单已取消",
+    "cancelFailed": "取消失败",
+    "customerName": "客户",
+    "customerEmail": "客户邮箱",
+    "orderDetailTitle": "订单详情",
+    "orderItemsTitle": "订单商品",
+    "skuManage": "SKU管理",
+    "manageSku": "管理SKU",
+    "skuPhotos": "SKU 图片",
+    "selectSkuTip": "请先点击选择一个 SKU 行，再管理图片",
+    "uploadSkuPhotos": "上传图片",
+    "uploadSuccess": "上传成功",
+    "uploadFailed": "上传失败",
+    "deleteSuccess": "删除成功",
+    "noPhotos": "暂无图片",
+    "optionValuesJson": "选项(JSON)",
+    "optionValuesJsonHint": "例如 {\"version\":\"平装\"}",
+    "priceAdjustment": "加价",
+    "stockQuantity": "库存",
+    "available": "可售",
+    "newSku": "新增 SKU",
+    "addSku": "添加 SKU",
+    "operations": "操作",
+    "delete": "删除",
+    "visible": "显示",
+    "hidden": "隐藏",
+    "reportRange": "时间范围",
+    "granularity": "粒度",
+    "day": "按日",
+    "week": "按周",
+    "month": "按月",
+    "totalSales": "总销售额",
+    "orderCount": "订单数",
+    "bestSellers": "畅销榜",
+    "salesTrend": "销售趋势"
+    ,"start": "开始日期"
+    ,"end": "结束日期"
+    ,"all": "全部"
+    ,"updated": "已更新"
+    ,"deleted": "已删除"
+  }
+  ,"msg": {
+    "loginRequired": "请先登录",
+    "loginFailed": "登录失败",
+    "noPermission": "没有权限访问该页面",
+    "fillRequired": "请填写必填字段",
+    "invalidJson": "JSON 格式不正确",
+    "noImage": "无图片",
+    "loading": "加载中...",
+    "noText": "（无文字）"
+    ,"saveFailed": "保存失败"
+    ,"updateFailed": "更新失败"
+    ,"deleteFailed": "删除失败"
+    ,"loadFailed": "加载失败"
+    ,"registerFailed": "注册失败"
+    ,"addToCartFailed": "添加失败（可能需要登录）"
+    ,"reviewFailed": "评论失败（需购买后评论）"
+    ,"saveAddressSuccess": "地址已保存"
+    ,"loginToReview": "登录后才能发表评论"
+  }
+  ,"status": {
+    "pending": "待处理",
+    "shipped": "已发货",
+    "cancelled": "已取消",
+    "completed": "已完成"
+  }
+}
