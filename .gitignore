@@ -51,9 +51,11 @@ env/
 !.env.example
 
 # === SQLite DB ===
-backend/app/app.db
 *.sqlite
 *.sqlite3
+!backend/app/app.db
+!backend/app/uploads/
+!backend/app/uploads/**
 
 # === Node/Frontend ===
 node_modules/

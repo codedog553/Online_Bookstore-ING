@@ -15,8 +15,6 @@ const routes: RouteRecordRaw[] = [
   { path: '/admin/products', component: () => import('../views/admin/AdminProducts.vue'), meta: { requiresAdmin: true } },
   { path: '/admin/orders', component: () => import('../views/admin/AdminOrders.vue'), meta: { requiresAdmin: true } },
   { path: '/admin/orders/:orderId', component: () => import('../views/admin/AdminOrderDetail.vue'), meta: { requiresAdmin: true } },
-  // 新增：后台评论/报表（后续会补页面文件）
-  { path: '/admin/reviews', component: () => import('../views/admin/AdminReviews.vue'), meta: { requiresAdmin: true } },
   { path: '/admin/reports', component: () => import('../views/admin/AdminReports.vue'), meta: { requiresAdmin: true } },
 ]
 

@@ -1,45 +1,80 @@
 """
-简单的示例数据初始化脚本：
-- 创建管理员与普通用户
-- 创建分类、商品及 SKU（平装/精装）
-- 创建示例地址、订单与评论
+示例数据初始化脚本。
 
-注意：本脚本用于“开发/演示”场景的清库重建。
-- 会清空数据库中的所有业务表数据；
-- 会清空本地上传目录 backend/app/uploads（包括你手动上传的图片）。
-  如果你希望保留手动上传图片，请自行修改 reset_uploads 的行为。
-
-使用方法：
-  conda activate Qchat
-  pip install -r backend/requirements.txt
-  python -m app.seed
+- `python -m app.seed`：完全重置数据，并重建/下载商品图片
+- `python -m app.seed_no_images`：仅重置数据库业务数据，保留 uploads，不下载图片
 """
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+from dataclasses import dataclass
+from datetime import timedelta
+from typing import Optional
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
 from sqlalchemy.orm import Session
-from .db import SessionLocal, init_db
+
 from . import models
 from .auth import get_password_hash
-import json
-from typing import Optional
-
-import os
-import uuid
-from datetime import datetime, timedelta
-
+from .db import SessionLocal, init_db
 from .time_utils import now_cn_naive
 
 
-def reset_all(db: Session):
-    # =========================
-    # 数据库清理（清库重建）
-    # =========================
-    # 说明：SQLite/SQLAlchemy 的 delete() 不会自动处理“非 ORM 级别 cascade 的历史数据”。
-    # 因此我们在此显式逐表清理，确保多次运行 seed 不会出现“重复时间线/重复演示数据”。
-    #
-    # B4：订单状态时间线表（OrderStatusEvent）必须清理；
-    #     否则每次 seed 会对同一个演示订单重复插入 timeline event（看起来像“重复创建映射”）。
-    db.query(models.OrderStatusEvent).delete()
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOADS_DIR = os.path.join(ROOT_DIR, "uploads")
+SEED_IMAGE_CACHE_DIR = os.path.join(ROOT_DIR, "seed_image_cache")
+SEED_DATA_DIR = os.path.join(ROOT_DIR, "seed_data")
+BOOKS_DATA_PATH = os.path.join(SEED_DATA_DIR, "books.json")
 
-    # 其余表：为简单起见逐表清理
+LOCAL_FALLBACK_COVERS = [
+    os.path.normpath(os.path.join(ROOT_DIR, "..", "..", "frontend", "src", "img", "1984normal.jpg")),
+    os.path.normpath(os.path.join(ROOT_DIR, "..", "..", "frontend", "src", "img", "1984good.jpg")),
+]
+
+CATEGORY_MAP = {
+    "literature": "文学",
+    "scifi": "科幻",
+    "technology": "科技",
+    "business": "商业",
+    "history": "历史",
+    "children": "少儿",
+    "science": "科学",
+}
+
+OPTION_IMAGES_I18N = {
+    "版本": {
+        "平装": "Paperback",
+        "精装": "Hardcover",
+    }
+}
+
+
+@dataclass
+class SeedBook:
+    slug: str
+    title: str
+    title_en: str
+    author: str
+    author_en: str
+    publisher: str
+    publisher_en: str
+    description: str
+    description_en: str
+    category: str
+    base_price: float
+    isbn: Optional[str] = None
+    cover_urls: Optional[list[str]] = None
+
+
+def reset_all(db: Session):
+    db.query(models.ProductCommentLike).delete()
+    db.query(models.ProductComment).delete()
+    db.query(models.ProductRating).delete()
+    db.query(models.OrderStatusEvent).delete()
     db.query(models.Review).delete()
     db.query(models.OrderItem).delete()
     db.query(models.Order).delete()
@@ -53,36 +88,143 @@ def reset_all(db: Session):
 
 
 def reset_uploads():
-    """清空本地上传目录（uploads）。
-
-    目的：
-    - 避免多次运行 seed 后，占位文件/图片在文件系统中不断累积；
-    - 避免 sku_id 被复用时，旧目录残留导致你误以为“图片映射被重复创建”。
-
-    风险：
-    - 该操作会删除你手动在管理端上传的图片。
-      你已确认可以接受“彻底清空 uploads，再手动重新上传”。
-    """
-
-    uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
-    if not os.path.exists(uploads_dir):
+    if not os.path.exists(UPLOADS_DIR):
         return
 
-    # 递归删除 uploads_dir 下所有内容，但保留 uploads_dir 目录本身。
-    # 仅用于演示/开发环境。
-    for name in os.listdir(uploads_dir):
-        p = os.path.join(uploads_dir, name)
+    for name in os.listdir(UPLOADS_DIR):
+        path = os.path.join(UPLOADS_DIR, name)
         try:
-            if os.path.isdir(p):
-                # Python 3.8+ 可用 shutil.rmtree
-                import shutil
-
-                shutil.rmtree(p, ignore_errors=True)
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
             else:
-                os.remove(p)
+                os.remove(path)
         except Exception:
-            # 清理失败不应阻止 seed（例如文件占用）
             pass
+
+
+def _load_books() -> list[SeedBook]:
+    with open(BOOKS_DATA_PATH, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+    books: list[SeedBook] = []
+    for item in raw:
+        books.append(
+            SeedBook(
+                slug=str(item["slug"]),
+                title=str(item["title"]),
+                title_en=str(item["title_en"]),
+                author=str(item["author"]),
+                author_en=str(item["author_en"]),
+                publisher=str(item["publisher"]),
+                publisher_en=str(item["publisher_en"]),
+                description=str(item["description"]),
+                description_en=str(item["description_en"]),
+                category=str(item["category"]),
+                base_price=float(item["base_price"]),
+                isbn=str(item["isbn"]).strip() if item.get("isbn") else None,
+                cover_urls=[str(x) for x in item.get("cover_urls") or []],
+            )
+        )
+    if not books:
+        raise RuntimeError("seed_data/books.json 为空，无法生成真实书籍数据")
+    return books
+
+
+def _cover_candidates(book: SeedBook) -> list[str]:
+    urls = list(book.cover_urls or [])
+    if book.isbn:
+        isbn = book.isbn.replace("-", "").strip()
+        urls.extend(
+            [
+                f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false",
+                f"https://covers.openlibrary.org/b/isbn/{isbn}-M.jpg?default=false",
+            ]
+        )
+    return urls
+
+
+def _cache_path(book: SeedBook, index: int) -> str:
+    return os.path.join(SEED_IMAGE_CACHE_DIR, f"{book.slug}_{index}.jpg")
+
+
+def _download_to_cache(url: str, cache_path: str) -> bool:
+    try:
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0 Kilo Seed"})
+        with urlopen(req, timeout=20) as resp:
+            content_type = (resp.headers.get("Content-Type") or "").lower()
+            data = resp.read()
+        if not data:
+            return False
+        if content_type and not content_type.startswith("image/"):
+            return False
+        with open(cache_path, "wb") as f:
+            f.write(data)
+        return True
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+        return False
+
+
+def _existing_fallback_covers() -> list[str]:
+    paths = []
+    for path in LOCAL_FALLBACK_COVERS:
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            paths.append(path)
+    return paths
+
+
+def _ensure_book_cover_cache(book: SeedBook) -> list[str]:
+    os.makedirs(SEED_IMAGE_CACHE_DIR, exist_ok=True)
+    cached_paths: list[str] = []
+    for idx, url in enumerate(_cover_candidates(book), start=1):
+        cache_path = _cache_path(book, idx)
+        if os.path.exists(cache_path) and os.path.getsize(cache_path) > 0:
+            cached_paths.append(cache_path)
+            continue
+        if _download_to_cache(url, cache_path):
+            cached_paths.append(cache_path)
+
+    if cached_paths:
+        return cached_paths
+
+    fallbacks = _existing_fallback_covers()
+    if fallbacks:
+        return fallbacks
+    raise RuntimeError(f"未能为书籍 {book.slug} 准备真实封面")
+
+
+def _get_local_book_cover_sources(book: SeedBook) -> list[str]:
+    cached_paths: list[str] = []
+    for idx, _url in enumerate(_cover_candidates(book), start=1):
+        cache_path = _cache_path(book, idx)
+        if os.path.exists(cache_path) and os.path.getsize(cache_path) > 0:
+            cached_paths.append(cache_path)
+    if cached_paths:
+        return cached_paths
+
+    fallbacks = _existing_fallback_covers()
+    if fallbacks:
+        return fallbacks
+
+    raise RuntimeError(f"本地缓存中没有书籍 {book.slug} 的可用封面，且缺少 fallback 图片")
+
+
+def _copy_cover_to_sku(sku_id: int, image_path: str, idx: int) -> str:
+    sku_dir = os.path.join(UPLOADS_DIR, f"sku_{sku_id}")
+    os.makedirs(sku_dir, exist_ok=True)
+    ext = os.path.splitext(image_path)[1].lower() or ".jpg"
+    target = os.path.join(sku_dir, f"seed_{idx}{ext}")
+    shutil.copyfile(image_path, target)
+    return f"/uploads/sku_{sku_id}/seed_{idx}{ext}"
+
+
+def _ensure_multi_images(paths: list[str], desired_count: int = 2) -> list[str]:
+    if not paths:
+        raise ValueError("paths cannot be empty")
+    if len(paths) >= desired_count:
+        return paths[:desired_count]
+    result = list(paths)
+    while len(result) < desired_count:
+        result.append(paths[len(result) % len(paths)])
+    return result
 
 
 def create_users(db: Session):
@@ -107,88 +249,77 @@ def create_users(db: Session):
     return admin, user
 
 
-def create_categories(db: Session):
-    cat1 = models.Category(name="文学", sort_order=1)
-    cat2 = models.Category(name="科技", sort_order=2)
-    db.add_all([cat1, cat2])
+def create_categories(db: Session) -> dict[str, models.Category]:
+    created: dict[str, models.Category] = {}
+    for idx, (slug, name) in enumerate(CATEGORY_MAP.items(), start=1):
+        cat = models.Category(name=name, sort_order=idx)
+        db.add(cat)
+        db.flush()
+        created[slug] = cat
     db.commit()
-    db.refresh(cat1)
-    db.refresh(cat2)
-    return cat1, cat2
+    for cat in created.values():
+        db.refresh(cat)
+    return created
 
 
-def create_product_with_skus(
-    db: Session,
-    title: str,
-    author: str,
-    base_price: float,
-    category_id: int,
-    # 注意：新实现的图片只走 SKU 本地上传（sku.photos），此处保留参数仅用于 seed 生成文件。
-    images: list[str],
-    *,
-    title_en: Optional[str] = None,
-    author_en: Optional[str] = None,
-    description_en: Optional[str] = None,
-):
+def create_product_with_skus(db: Session, book: SeedBook, category_id: int, include_images: bool = True):
+    options = {
+        "版本": ["平装", "精装"],
+        "optionValueI18n": OPTION_IMAGES_I18N,
+    }
     prod = models.Product(
-        title=title,
-        title_en=title_en or title,
-        author=author,
-        author_en=author_en or author,
-        base_price=base_price,
-        description=f"《{title}》简介……",
-        description_en=description_en or f"Introduction of {title}...",
+        title=book.title,
+        title_en=book.title_en,
+        author=book.author,
+        author_en=book.author_en,
+        publisher=book.publisher,
+        publisher_en=book.publisher_en,
+        base_price=book.base_price,
+        description=book.description,
+        description_en=book.description_en,
         category_id=category_id,
         is_active=True,
-        options=json.dumps({"version": ["平装", "精装"]}, ensure_ascii=False),
+        options=json.dumps(options, ensure_ascii=False),
     )
     db.add(prod)
     db.commit()
     db.refresh(prod)
 
-    # 平装/精装 两个 SKU
     sku1 = models.ProductSKU(
         product_id=prod.id,
-        option_values=json.dumps({"version": "平装"}, ensure_ascii=False),
+        option_values=json.dumps({"版本": "平装"}, ensure_ascii=False),
         price_adjustment=0,
-        stock_quantity=50,
+        stock_quantity=40,
         is_available=True,
     )
     sku2 = models.ProductSKU(
         product_id=prod.id,
-        option_values=json.dumps({"version": "精装"}, ensure_ascii=False),
-        price_adjustment=10.0,
-        stock_quantity=20,
+        option_values=json.dumps({"版本": "精装"}, ensure_ascii=False),
+        price_adjustment=12.0,
+        stock_quantity=18,
         is_available=True,
     )
     db.add_all([sku1, sku2])
     db.commit()
+    db.refresh(sku1)
+    db.refresh(sku2)
 
-    # 生成“本地上传”图片文件，并写入 sku.photos
-    uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
+    if include_images:
+        cached_paths = _ensure_book_cover_cache(book)
+        paperback_images = _ensure_multi_images(cached_paths, 2)
+        hardcover_images = _ensure_multi_images(list(reversed(cached_paths)), 2)
 
-    def _write_dummy_image(sku_id: int, idx: int) -> str:
-        """写入一个占位文件（不是真图片），用于演示 /uploads 静态路径与多图机制。
+        sku1.photos = json.dumps(
+            [_copy_cover_to_sku(sku1.id, path, idx + 1) for idx, path in enumerate(paperback_images)],
+            ensure_ascii=False,
+        )
+        sku2.photos = json.dumps(
+            [_copy_cover_to_sku(sku2.id, path, idx + 1) for idx, path in enumerate(hardcover_images)],
+            ensure_ascii=False,
+        )
+        db.add_all([sku1, sku2])
+        db.commit()
 
-        注意：如果你希望在浏览器真实显示图片，请在管理端用“上传图片”功能上传 jpg/png。
-        """
-
-        sku_dir = os.path.join(uploads_dir, f"sku_{sku_id}")
-        os.makedirs(sku_dir, exist_ok=True)
-        filename = f"seed_{idx}_{uuid.uuid4().hex}.txt"
-        abs_path = os.path.join(sku_dir, filename)
-        with open(abs_path, "w", encoding="utf-8") as f:
-            f.write(f"seed placeholder for {title} sku {sku_id} image {idx}\n")
-        return f"/uploads/sku_{sku_id}/{filename}"
-
-    # 为每个 SKU 写入 2 个占位文件路径
-    sku1.photos = json.dumps([_write_dummy_image(sku1.id, 1), _write_dummy_image(sku1.id, 2)], ensure_ascii=False)
-    sku2.photos = json.dumps([_write_dummy_image(sku2.id, 1), _write_dummy_image(sku2.id, 2)], ensure_ascii=False)
-    db.add_all([sku1, sku2])
-    db.commit()
-
-    # 更新价格范围
     prices = [float(prod.base_price) + float(sku1.price_adjustment or 0), float(prod.base_price) + float(sku2.price_adjustment or 0)]
     prod.min_price = min(prices)
     prod.max_price = max(prices)
@@ -197,8 +328,33 @@ def create_product_with_skus(
     return prod
 
 
+def bind_local_images_for_product(db: Session, book: SeedBook, product: models.Product):
+    sku_list = (
+        db.query(models.ProductSKU)
+        .filter(models.ProductSKU.product_id == product.id)
+        .order_by(models.ProductSKU.id.asc())
+        .all()
+    )
+    if len(sku_list) < 2:
+        return
+
+    cached_paths = _get_local_book_cover_sources(book)
+    paperback_images = _ensure_multi_images(cached_paths, 2)
+    hardcover_images = _ensure_multi_images(list(reversed(cached_paths)), 2)
+
+    sku_list[0].photos = json.dumps(
+        [_copy_cover_to_sku(sku_list[0].id, path, idx + 1) for idx, path in enumerate(paperback_images)],
+        ensure_ascii=False,
+    )
+    sku_list[1].photos = json.dumps(
+        [_copy_cover_to_sku(sku_list[1].id, path, idx + 1) for idx, path in enumerate(hardcover_images)],
+        ensure_ascii=False,
+    )
+    db.add_all(sku_list[:2])
+    db.commit()
+
+
 def create_demo_order_and_review(db: Session, user: models.User, product: models.Product):
-    # 地址
     addr = models.Address(
         user_id=user.id,
         receiver_name=user.full_name,
@@ -216,21 +372,21 @@ def create_demo_order_and_review(db: Session, user: models.User, product: models
     db.add(user)
     db.commit()
 
-    # 选择精装 SKU
-    sku = db.query(models.ProductSKU).filter(models.ProductSKU.product_id == product.id, models.ProductSKU.option_values.like('%精装%')).first()
+    sku = (
+        db.query(models.ProductSKU)
+        .filter(models.ProductSKU.product_id == product.id, models.ProductSKU.option_values.like("%精装%"))
+        .first()
+    )
     unit_price = float(product.base_price) + float(sku.price_adjustment or 0)
 
-    # 订单 + 时间线（B4）：演示 pending -> shipped -> completed
-    # 注意：所有时间使用中国大陆时间（UTC+8）。
     created_at = now_cn_naive() - timedelta(days=1)
     shipped_at = created_at + timedelta(hours=4)
     completed_at = shipped_at + timedelta(hours=6)
 
-    od = models.Order(
+    order = models.Order(
         order_id="ORDER99991231-001",
         user_id=user.id,
         address_id=addr.id,
-        # 地址快照（A13）
         ship_receiver_name=addr.receiver_name,
         ship_phone=addr.phone,
         ship_province=addr.province,
@@ -243,134 +399,80 @@ def create_demo_order_and_review(db: Session, user: models.User, product: models
         shipped_at=shipped_at,
         completed_at=completed_at,
     )
-    db.add(od)
+    db.add(order)
     db.commit()
-    db.refresh(od)
+    db.refresh(order)
 
-    # 时间线事件
     db.add_all(
         [
-            models.OrderStatusEvent(order_id=od.order_id, status="pending", created_at=created_at),
-            models.OrderStatusEvent(order_id=od.order_id, status="shipped", note="seed shipped", created_at=shipped_at),
-            models.OrderStatusEvent(order_id=od.order_id, status="completed", note="seed completed", created_at=completed_at),
+            models.OrderStatusEvent(order_id=order.order_id, status="pending", created_at=created_at),
+            models.OrderStatusEvent(order_id=order.order_id, status="shipped", note="seed shipped", created_at=shipped_at),
+            models.OrderStatusEvent(order_id=order.order_id, status="completed", note="seed completed", created_at=completed_at),
         ]
     )
     db.commit()
 
-    oi = models.OrderItem(
-        order_id=od.order_id,
-        sku_id=sku.id,
-        quantity=1,
-        unit_price=unit_price,
-        option_values=sku.option_values,
+    db.add(
+        models.OrderItem(
+            order_id=order.order_id,
+            sku_id=sku.id,
+            quantity=1,
+            unit_price=unit_price,
+            option_values=sku.option_values,
+        )
     )
-    db.add(oi)
     db.commit()
 
-    rv = models.Review(
-        user_id=user.id,
-        product_id=product.id,
-        order_id=od.order_id,
-        rating=5,
-        comment="非常好看！",
-        is_visible=True,
+    db.add(models.ProductRating(user_id=user.id, product_id=product.id, order_id=order.order_id, rating=5, created_at=completed_at))
+    db.add(
+        models.ProductComment(
+            user_id=user.id,
+            product_id=product.id,
+            content="装帧很好，内容也很值得收藏。",
+            created_at=completed_at,
+            updated_at=completed_at,
+        )
     )
-    db.add(rv)
     db.commit()
 
 
-def main():
+def run_seed(include_images: bool, reset_images: bool):
     init_db()
     db = SessionLocal()
     try:
-        # 清 uploads（文件系统层面），再清 DB（数据层面）
-        # 顺序说明：先删文件再删 DB，避免极端情况下 DB 删除失败但文件已清空导致“不一致”。
-        reset_uploads()
+        if reset_images:
+            reset_uploads()
         reset_all(db)
-        admin, user = create_users(db)
-        cat1, cat2 = create_categories(db)
-        # 示例图
-        imgs1 = [
-            "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=800",
-            "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?w=800",
-        ]
-        imgs2 = [
-            "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800",
-            "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800",
-        ]
-        # =========================
-        # 扩充种子商品数量（A5：便于分页展示）
-        # =========================
-        # 前端当前分页 size=20，因此默认生成 >= 60 个商品，可展示至少 3 页。
-        # 你可以通过环境变量 SEED_PRODUCT_COUNT 调整：
-        # - Windows: set SEED_PRODUCT_COUNT=120
-        # - macOS/Linux: export SEED_PRODUCT_COUNT=120
+        books = _load_books()
+        _admin, user = create_users(db)
+        categories = create_categories(db)
+
         try:
-            product_count = int(os.environ.get("SEED_PRODUCT_COUNT", "60"))
+            product_count = int(os.environ.get("SEED_PRODUCT_COUNT", "24"))
         except Exception:
-            product_count = 60
+            product_count = 24
         product_count = max(1, product_count)
 
-        # 保留 2 个“代表性商品”：用于演示双语字段、SKU（平装/精装）与多图机制
-        featured_products: list[models.Product] = []
-        featured_products.append(
-            create_product_with_skus(
-                db,
-                "哈利波特与魔法石",
-                "J.K.罗琳",
-                49.0,
-                cat1.id,
-                imgs1,
-                title_en="Harry Potter and the Philosopher's Stone",
-                author_en="J.K. Rowling",
-                description_en="The first book in the Harry Potter series.",
-            )
-        )
-        featured_products.append(
-            create_product_with_skus(
-                db,
-                "深入浅出计算机",
-                "张三",
-                59.0,
-                cat2.id,
-                imgs2,
-                title_en="Computer Science Made Easy",
-                author_en="Zhang San",
-                description_en="An easy-to-understand introduction to computer science.",
-            )
-        )
+        selected_books = books[: min(product_count, len(books))]
+        created_products: list[models.Product] = []
+        for book in selected_books:
+            category = categories.get(book.category) or categories["literature"]
+            product = create_product_with_skus(db, book, category.id, include_images=include_images)
+            if not include_images:
+                bind_local_images_for_product(db, book, product)
+            created_products.append(product)
 
-        # 批量生成其余商品：使用简单模板生成，避免 seed 过长。
-        # 说明：仍然创建平装/精装两个 SKU，并写入 2 个占位文件到 sku.photos。
-        remaining = max(0, product_count - len(featured_products))
-        for i in range(remaining):
-            # 让 created_at 产生自然分布：越新的排在越前（配合 /api/products created_at desc）
-            # 注意：我们不强行改 created_at 字段，交由 DB 默认即可；这里只用“名字/价格”区分。
-            idx = i + 1
-            title = f"演示图书 {idx:03d}"
-            title_en = f"Demo Book {idx:03d}"
-            author = "演示作者"
-            author_en = "Demo Author"
-            base_price = 20.0 + (idx % 30)
-            cat_id = cat1.id if (idx % 2 == 0) else cat2.id
-            create_product_with_skus(
-                db,
-                title,
-                author,
-                base_price,
-                cat_id,
-                imgs1 if (idx % 2 == 0) else imgs2,
-                title_en=title_en,
-                author_en=author_en,
-                description_en=f"Introduction of {title_en}...",
-            )
+        if created_products:
+            create_demo_order_and_review(db, user, created_products[0])
 
-        # 用 featured_products[0] 生成一个演示订单与评论
-        create_demo_order_and_review(db, user, featured_products[0])
-
-        print("Seed completed. Admin: admin@demo.com / Admin1234, User: user@demo.com / User1234")
+        mode = "with real books and refreshed images" if include_images else "without image refresh"
+        print(f"Seed completed {mode}. Admin: admin@demo.com / Admin1234, User: user@demo.com / User1234")
     finally:
         db.close()
+
+
+def main():
+    run_seed(include_images=True, reset_images=True)
 
 
 if __name__ == "__main__":

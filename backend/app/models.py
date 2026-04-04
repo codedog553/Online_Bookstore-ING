@@ -34,6 +34,9 @@ class User(Base):
     cart_items = relationship("CartItem", back_populates="user", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="user", foreign_keys="Order.user_id")
     reviews = relationship("Review", back_populates="user", foreign_keys="Review.user_id")
+    product_ratings = relationship("ProductRating", back_populates="user", cascade="all, delete-orphan")
+    product_comments = relationship("ProductComment", back_populates="user", cascade="all, delete-orphan")
+    comment_likes = relationship("ProductCommentLike", back_populates="user", cascade="all, delete-orphan")
     default_address = relationship("Address", foreign_keys=[default_address_id], uselist=False)
 
 
@@ -100,6 +103,8 @@ class Product(Base):
     category = relationship("Category", back_populates="products")
     skus = relationship("ProductSKU", back_populates="product", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="product")
+    ratings = relationship("ProductRating", back_populates="product", cascade="all, delete-orphan")
+    comments = relationship("ProductComment", back_populates="product", cascade="all, delete-orphan")
 
 
 class ProductSKU(Base):
@@ -219,3 +224,45 @@ class Review(Base):
     user = relationship("User", back_populates="reviews", foreign_keys=[user_id])
     product = relationship("Product", back_populates="reviews", foreign_keys=[product_id])
     order = relationship("Order", back_populates="reviews", foreign_keys=[order_id])
+
+
+class ProductRating(Base):
+    __tablename__ = "product_ratings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    order_id = Column(String(20), ForeignKey("orders.order_id"), nullable=False)
+    rating = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=now_cn_naive)
+
+    user = relationship("User", back_populates="product_ratings", foreign_keys=[user_id])
+    product = relationship("Product", back_populates="ratings", foreign_keys=[product_id])
+    order = relationship("Order", foreign_keys=[order_id])
+
+
+class ProductComment(Base):
+    __tablename__ = "product_comments"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("product_comments.id"), nullable=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=now_cn_naive)
+    updated_at = Column(DateTime, default=now_cn_naive, onupdate=now_cn_naive)
+
+    user = relationship("User", back_populates="product_comments", foreign_keys=[user_id])
+    product = relationship("Product", back_populates="comments", foreign_keys=[product_id])
+    parent = relationship("ProductComment", remote_side=[id], back_populates="replies")
+    replies = relationship("ProductComment", back_populates="parent", cascade="all, delete-orphan")
+    likes = relationship("ProductCommentLike", back_populates="comment", cascade="all, delete-orphan")
+
+
+class ProductCommentLike(Base):
+    __tablename__ = "product_comment_likes"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    comment_id = Column(Integer, ForeignKey("product_comments.id"), nullable=False)
+    created_at = Column(DateTime, default=now_cn_naive)
+
+    user = relationship("User", back_populates="comment_likes", foreign_keys=[user_id])
+    comment = relationship("ProductComment", back_populates="likes", foreign_keys=[comment_id])

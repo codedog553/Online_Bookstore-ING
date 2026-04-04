@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+import logging
 import os
 import uuid
 from typing import List, Optional
@@ -14,6 +15,7 @@ from ..deps import get_current_admin
 from ..time_utils import now_cn_naive
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+logger = logging.getLogger(__name__)
 
 # =========================
 # Requirements Traceability
@@ -323,18 +325,29 @@ def update_product(product_id: int, payload: schemas.AdminProductUpdate, db: Ses
 
 
 @router.get("/products", response_model=List[schemas.ProductOut])
-def list_all_products(db: Session = Depends(get_db), admin=Depends(get_current_admin), q: Optional[str] = Query(None)):
+def list_all_products(
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),
+    q: Optional[str] = Query(None),
+    search_by_id: bool = Query(False),
+):
     # A14：管理端商品目录列表 + 搜索。
-    # A15：支持按商品 ID 子串搜索（cast(Product.id, String).like）。
+    # A15：显式勾选时按商品 ID 搜索；默认仅按 title/title_en 搜索。
     query = db.query(models.Product)
     if q:
-        like = f"%{q}%"
-        # A15: 支持按商品 ID 子串搜索
-        query = query.filter(
-            (models.Product.title.like(like))
-            | (models.Product.title_en.like(like))
-            | (cast(models.Product.id, String).like(like))
-        )
+        q_value = q.strip()
+        like = f"%{q_value}%"
+        logger.info("Admin product search q=%r search_by_id=%s", q_value, search_by_id)
+        if search_by_id:
+            if not q_value.isdigit():
+                logger.info("Admin product exact ID search ignored for non-numeric input q=%r", q_value)
+                return []
+            query = query.filter(models.Product.id == int(q_value))
+        else:
+            query = query.filter(
+                (models.Product.title.like(like))
+                | (models.Product.title_en.like(like))
+            )
     return query.order_by(models.Product.created_at.desc()).all()
 
 
@@ -450,103 +463,6 @@ def admin_cancel_order(order_id: str, db: Session = Depends(get_db), admin=Depen
     _append_status_event(db, od.order_id, "cancelled", note="cancelled by vendor")
     db.commit()
     return schemas.Msg(message="订单已取消")
-
-
-@router.get("/reviews", response_model=List[schemas.AdminReviewOut])
-def list_reviews(
-    db: Session = Depends(get_db),
-    admin=Depends(get_current_admin),
-    q: Optional[str] = Query(None),
-    visible: Optional[bool] = Query(None),
-):
-    """管理端评论列表（内容治理）。
-
-    - q: 模糊搜索（用户邮箱 / 商品标题 / 评论内容 / 订单号）
-    - visible: 仅返回 visible / hidden
-    """
-
-    query = (
-        db.query(
-            models.Review,
-            models.User.email.label("user_email"),
-            models.Product.title.label("product_title"),
-        )
-        .join(models.User, models.User.id == models.Review.user_id)
-        .join(models.Product, models.Product.id == models.Review.product_id)
-        .order_by(models.Review.created_at.desc())
-    )
-
-    if visible is not None:
-        query = query.filter(models.Review.is_visible == visible)
-
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            (models.User.email.like(like))
-            | (models.Product.title.like(like))
-            | (models.Review.comment.like(like))
-            | (models.Review.order_id.like(like))
-        )
-
-    rows = query.all()
-    return [
-        schemas.AdminReviewOut(
-            id=rv.id,
-            user_id=rv.user_id,
-            user_email=user_email,
-            product_id=rv.product_id,
-            product_title=product_title,
-            order_id=rv.order_id,
-            rating=rv.rating,
-            comment=rv.comment,
-            is_visible=rv.is_visible,
-            created_at=rv.created_at,
-        )
-        for (rv, user_email, product_title) in rows
-    ]
-
-
-@router.patch("/reviews/{review_id}", response_model=schemas.AdminReviewOut)
-def update_review(
-    review_id: int,
-    payload: schemas.AdminReviewUpdate,
-    db: Session = Depends(get_db),
-    admin=Depends(get_current_admin),
-):
-    rv = db.query(models.Review).filter(models.Review.id == review_id).first()
-    if not rv:
-        raise HTTPException(status_code=404, detail="评论不存在")
-    rv.is_visible = payload.is_visible
-    db.add(rv)
-    db.commit()
-    db.refresh(rv)
-
-    # 理论上 join 一定能查到；这里给出兜底，避免 EmailStr 校验失败
-    user_email = db.query(models.User.email).filter(models.User.id == rv.user_id).scalar() or "unknown@example.com"
-    product_title = db.query(models.Product.title).filter(models.Product.id == rv.product_id).scalar() or "未知商品"
-
-    return schemas.AdminReviewOut(
-        id=rv.id,
-        user_id=rv.user_id,
-        user_email=user_email,
-        product_id=rv.product_id,
-        product_title=product_title,
-        order_id=rv.order_id,
-        rating=rv.rating,
-        comment=rv.comment,
-        is_visible=rv.is_visible,
-        created_at=rv.created_at,
-    )
-
-
-@router.delete("/reviews/{review_id}", response_model=schemas.Msg)
-def delete_review(review_id: int, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
-    rv = db.query(models.Review).filter(models.Review.id == review_id).first()
-    if not rv:
-        raise HTTPException(status_code=404, detail="评论不存在")
-    db.delete(rv)
-    db.commit()
-    return schemas.Msg(message="评论已删除")
 
 
 @router.get("/reports/sales", response_model=schemas.SalesSummaryOut)

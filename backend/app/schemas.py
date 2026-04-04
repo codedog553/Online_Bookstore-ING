@@ -327,24 +327,72 @@ class AdminOrderListOut(BaseModel):
 
 
 
-# 评论
-class ReviewCreate(BaseModel):
+# 评论/评分
+class RatingCreate(BaseModel):
+    order_id: str
     rating: int
-    comment: Optional[str] = None
 
 
-class ReviewOut(BaseModel):
+class CommentCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class CommentReplyCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class ProductRatingOut(BaseModel):
     id: int
     user_id: int
     product_id: int
     order_id: str
     rating: int
-    comment: Optional[str] = None
-    is_visible: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class ProductCommentReplyOut(BaseModel):
+    id: int
+    user_id: int
+    user_name: str
+    product_id: int
+    parent_id: int
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    like_count: int = 0
+    liked_by_me: bool = False
+
+
+class ProductCommentOut(BaseModel):
+    id: int
+    user_id: int
+    user_name: str
+    product_id: int
+    parent_id: Optional[int] = None
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    like_count: int = 0
+    liked_by_me: bool = False
+    replies: List[ProductCommentReplyOut] = []
+
+
+class ProductReviewSummaryOut(BaseModel):
+    average_rating: float = 0
+    rating_count: int = 0
+    comment_count: int = 0
+    my_rating_quota: int = 0
+    can_comment: bool = False
+    available_rating_orders: List[str] = []
+
+
+class ProductReviewPageOut(BaseModel):
+    summary: ProductReviewSummaryOut
+    ratings: List[ProductRatingOut] = []
+    comments: List[ProductCommentOut] = []
 
 
 # 管理端
@@ -403,24 +451,6 @@ class SalesSummaryOut(BaseModel):
     best_sellers: List[BestSellerOut] = []
     series: List[SalesSeriesPoint] = []
 
-
-class AdminReviewOut(BaseModel):
-    """管理端评论列表展示（用于内容治理）。"""
-
-    id: int
-    user_id: int
-    user_email: EmailStr
-    product_id: int
-    product_title: str
-    order_id: str
-    rating: int
-    comment: Optional[str] = None
-    is_visible: bool
-    created_at: datetime
-
-
-class AdminReviewUpdate(BaseModel):
-    is_visible: bool
 
 # 管理端 - SKU
 class AdminSKUCreate(BaseModel):

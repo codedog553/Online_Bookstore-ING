@@ -55,6 +55,8 @@ def init_db():
         _ensure_column(conn, "orders", "completed_at", "DATETIME")
         _ensure_column(conn, "orders", "cancelled_at", "DATETIME")
 
+        _ensure_product_review_tables(conn)
+
 
 def _ensure_column(conn, table: str, column: str, ddl_type: str):
     """若 SQLite 表中不存在 column，则执行 ALTER TABLE ADD COLUMN。
@@ -68,3 +70,65 @@ def _ensure_column(conn, table: str, column: str, ddl_type: str):
     if column in existing:
         return
     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
+
+
+def _ensure_product_review_tables(conn):
+    existing = {
+        row[0]
+        for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+    }
+
+    if "product_ratings" not in existing:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE product_ratings (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    product_id INTEGER NOT NULL,
+                    order_id VARCHAR(20) NOT NULL,
+                    rating INTEGER NOT NULL,
+                    created_at DATETIME,
+                    FOREIGN KEY(user_id) REFERENCES users(id),
+                    FOREIGN KEY(product_id) REFERENCES products(id),
+                    FOREIGN KEY(order_id) REFERENCES orders(order_id)
+                )
+                """
+            )
+        )
+
+    if "product_comments" not in existing:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE product_comments (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    product_id INTEGER NOT NULL,
+                    parent_id INTEGER,
+                    content TEXT NOT NULL,
+                    created_at DATETIME,
+                    updated_at DATETIME,
+                    FOREIGN KEY(user_id) REFERENCES users(id),
+                    FOREIGN KEY(product_id) REFERENCES products(id),
+                    FOREIGN KEY(parent_id) REFERENCES product_comments(id)
+                )
+                """
+            )
+        )
+
+    if "product_comment_likes" not in existing:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE product_comment_likes (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    comment_id INTEGER NOT NULL,
+                    created_at DATETIME,
+                    FOREIGN KEY(user_id) REFERENCES users(id),
+                    FOREIGN KEY(comment_id) REFERENCES product_comments(id)
+                )
+                """
+            )
+        )

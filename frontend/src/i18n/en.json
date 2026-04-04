@@ -28,7 +28,6 @@
     "myOrders": "My Orders",
     "adminProducts": "Admin - Products",
     "adminOrders": "Admin - Orders",
-    "adminReviews": "Admin - Reviews",
     "adminReports": "Admin - Reports"
   },
   "auth": {
@@ -62,7 +61,23 @@
     "noReviews": "No reviews",
     "rating": "Rating",
     "comment": "Comment",
-    "submit": "Submit"
+    "submit": "Submit",
+    "ratings": "Ratings",
+    "comments": "Comments",
+    "submitRating": "Submit rating",
+    "submitComment": "Post comment",
+    "reply": "Reply",
+    "replyComment": "Reply comment",
+    "like": "Like",
+    "sortByLikes": "By likes",
+    "sortByTime": "By time",
+    "reviewSort": "Sort",
+    "myRatingQuota": "Remaining rating chances",
+    "canComment": "You can comment after completed orders",
+    "ratingOrder": "Completed order",
+    "noRatingQuota": "No rating chances left",
+    "noComments": "No comments yet",
+    "likes": "Likes"
   },
   "cart": {
     "title": "Cart",
@@ -122,12 +137,12 @@
   "admin": {
     "productsTitle": "Admin - Products",
     "ordersTitle": "Admin - Orders",
-    "reviewsTitle": "Admin - Reviews",
     "reportsTitle": "Admin - Reports",
     "newProduct": "New product",
     "editProduct": "Edit product",
     "search": "Search",
     "keyword": "Keyword",
+    "searchById": "Search by ID",
     "id": "ID",
     "title": "Title",
     "titleEn": "Title (EN)",
@@ -141,6 +156,16 @@
     "imagesJsonHint": "e.g. [\"https://...\",\"https://...\"] (optional)",
     "optionsJson": "Options (JSON)",
     "optionsJsonHint": "e.g. {\"version\":[\"Paperback\",\"Hardcover\"],\"optionValueI18n\":{\"version\":{\"平装\":\"Paperback\",\"精装\":\"Hardcover\"}}}",
+    "optionsConfig": "Product options",
+    "noProductOptions": "If no product options are added, a default SKU will be created.",
+    "optionNamePlaceholder": "Option name, e.g. Version",
+    "optionValuePlaceholder": "Option value, e.g. Paperback",
+    "optionValueEnPlaceholder": "English label, e.g. Paperback",
+    "addOption": "Add option",
+    "addOptionValue": "Add option value",
+    "optionsBuilderHint": "Configure product options with the form. JSON for the backend is generated automatically.",
+    "optionSelection": "SKU options",
+    "simpleSkuHint": "This product has no configurable options. A default SKU will be created.",
     "save": "Save",
     "back": "Back",
     "ship": "Ship",
@@ -206,5 +231,9 @@
     ,"reviewFailed": "Review failed (purchase required)"
     ,"saveAddressSuccess": "Address saved"
     ,"loginToReview": "Please login to write a review"
+    ,"ratingFailed": "Rating failed"
+    ,"commentFailed": "Comment failed"
+    ,"replyFailed": "Reply failed"
+    ,"likeFailed": "Like failed"
   }
 }

@@ -8,6 +8,7 @@
           <span>{{ t('admin.search') }}</span>
           <div style="display:flex;gap:8px;align-items:center">
             <el-input v-model="q" :placeholder="t('admin.keyword')" style="width:260px" @keyup.enter="load" />
+            <el-checkbox v-model="searchById">{{ t('admin.searchById') }}</el-checkbox>
             <el-button @click="load">{{ t('admin.search') }}</el-button>
           </div>
         </div>
@@ -26,8 +27,26 @@
         <el-form-item :label="t('admin.basePrice')"><el-input v-model.number="form.base_price" type="number" /></el-form-item>
         <el-form-item :label="t('admin.description')"><el-input type="textarea" v-model="form.description" /></el-form-item>
         <el-form-item :label="t('admin.descriptionEn')"><el-input type="textarea" v-model="form.description_en" /></el-form-item>
-        <el-form-item :label="t('admin.optionsJson')">
-          <el-input type="textarea" v-model="form.options" :placeholder="t('admin.optionsJsonHint')" />
+        <el-form-item :label="t('admin.optionsConfig')">
+          <div class="optionBuilder">
+            <div v-if="!createOptionItems.length" class="helperText">{{ t('admin.noProductOptions') }}</div>
+            <div v-for="(option, optionIndex) in createOptionItems" :key="`create-${optionIndex}`" class="optionCard">
+              <div class="optionHeader">
+                <el-input v-model="option.key" :placeholder="t('admin.optionNamePlaceholder')" />
+                <el-button text type="danger" @click="removeCreateOption(optionIndex)">{{ t('admin.delete') }}</el-button>
+              </div>
+              <div v-for="(value, valueIndex) in option.values" :key="`create-${optionIndex}-${valueIndex}`" class="optionValueRow">
+                <el-input v-model="value.zh" :placeholder="t('admin.optionValuePlaceholder')" />
+                <el-input v-model="value.en" :placeholder="t('admin.optionValueEnPlaceholder')" />
+                <el-button text type="danger" @click="removeCreateOptionValue(optionIndex, valueIndex)">{{ t('admin.delete') }}</el-button>
+              </div>
+              <el-button link type="primary" @click="addCreateOptionValue(optionIndex)">{{ t('admin.addOptionValue') }}</el-button>
+            </div>
+            <div class="optionActions">
+              <el-button @click="addCreateOption">{{ t('admin.addOption') }}</el-button>
+            </div>
+            <div class="helperText">{{ t('admin.optionsBuilderHint') }}</div>
+          </div>
         </el-form-item>
         <el-form-item :label="t('admin.isActive')"><el-switch v-model="form.is_active" /></el-form-item>
         <el-form-item>
@@ -73,7 +92,27 @@
         <el-form-item :label="t('admin.basePrice')"><el-input v-model.number="editForm.base_price" type="number" /></el-form-item>
         <el-form-item :label="t('admin.description')"><el-input type="textarea" v-model="editForm.description" /></el-form-item>
         <el-form-item :label="t('admin.descriptionEn')"><el-input type="textarea" v-model="editForm.description_en" /></el-form-item>
-        <el-form-item :label="t('admin.optionsJson')"><el-input type="textarea" v-model="editForm.options" /></el-form-item>
+        <el-form-item :label="t('admin.optionsConfig')">
+          <div class="optionBuilder">
+            <div v-if="!editOptionItems.length" class="helperText">{{ t('admin.noProductOptions') }}</div>
+            <div v-for="(option, optionIndex) in editOptionItems" :key="`edit-${optionIndex}`" class="optionCard">
+              <div class="optionHeader">
+                <el-input v-model="option.key" :placeholder="t('admin.optionNamePlaceholder')" />
+                <el-button text type="danger" @click="removeEditOption(optionIndex)">{{ t('admin.delete') }}</el-button>
+              </div>
+              <div v-for="(value, valueIndex) in option.values" :key="`edit-${optionIndex}-${valueIndex}`" class="optionValueRow">
+                <el-input v-model="value.zh" :placeholder="t('admin.optionValuePlaceholder')" />
+                <el-input v-model="value.en" :placeholder="t('admin.optionValueEnPlaceholder')" />
+                <el-button text type="danger" @click="removeEditOptionValue(optionIndex, valueIndex)">{{ t('admin.delete') }}</el-button>
+              </div>
+              <el-button link type="primary" @click="addEditOptionValue(optionIndex)">{{ t('admin.addOptionValue') }}</el-button>
+            </div>
+            <div class="optionActions">
+              <el-button @click="addEditOption">{{ t('admin.addOption') }}</el-button>
+            </div>
+            <div class="helperText">{{ t('admin.optionsBuilderHint') }}</div>
+          </div>
+        </el-form-item>
         <el-form-item :label="t('admin.isActive')"><el-switch v-model="editForm.is_active" /></el-form-item>
       </el-form>
       <template #footer>
@@ -144,8 +183,23 @@
 
         <h4>{{ t('admin.newSku') }}</h4>
         <el-form :model="newSku" label-width="120px">
-          <el-form-item :label="t('admin.optionValuesJson')">
-            <el-input type="textarea" v-model="newSku.option_values" :placeholder="t('admin.optionValuesJsonHint')" />
+          <el-form-item :label="t('admin.optionSelection')">
+            <div class="skuOptionBuilder">
+              <template v-if="currentProductOptionItems.length">
+                <div v-for="option in currentProductOptionItems" :key="option.key" class="skuOptionRow">
+                  <span class="skuOptionLabel">{{ option.key }}</span>
+                  <el-select v-model="newSkuSelections[option.key]" :placeholder="t('product.select')" style="width:100%">
+                    <el-option
+                      v-for="value in option.values"
+                      :key="`${option.key}-${value.zh}`"
+                      :label="formatOptionChoice(value)"
+                      :value="value.zh"
+                    />
+                  </el-select>
+                </div>
+              </template>
+              <div v-else class="helperText">{{ t('admin.simpleSkuHint') }}</div>
+            </div>
           </el-form-item>
           <el-form-item :label="t('admin.priceAdjustment')">
             <el-input v-model.number="newSku.price_adjustment" type="number" />
@@ -165,7 +219,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import api from '../../api/http'
 import { extractErrorMessage } from '../../api/error'
 import { ElMessage } from 'element-plus'
@@ -175,7 +229,7 @@ import { useI18n } from 'vue-i18n'
 // Requirements Traceability
 // =========================
 // A14: vendor/admin 可浏览/搜索商品目录。
-// A15: 支持按商品 ID 子串搜索（后端 /api/admin/products?q=... 同时匹配 id/title/title_en）。
+// A15: 管理端显式勾选“按 ID 查找”后，仅按商品 ID 搜索；未勾选时按 title/title_en 搜索。
 // A16: 可新增商品（包含中英双语字段）；图片按 SKU 维度本地上传、可多张。
 // A17: 可编辑商品详情。
 // A18: 可上架/下架（is_active）。
@@ -199,10 +253,13 @@ interface Product {
   options?:string|null
 }
 interface SKU { id:number; product_id:number; option_values:string; price_adjustment:number; stock_quantity:number; is_available:boolean; photos?: string | null }
+interface OptionValueDraft { zh:string; en:string }
+interface ProductOptionDraft { key:string; values: OptionValueDraft[] }
 
 const { t } = useI18n()
 
 const q = ref('')
+const searchById = ref(false)
 
 const list = ref<Product[]>([])
 const loading = ref(false)
@@ -220,10 +277,14 @@ const form = ref({
   description_en:'',
   options:''
 })
+const createOptionItems = ref<ProductOptionDraft[]>([])
+const createOptionExtra = ref<Record<string, any>>({})
 
 const editVisible = ref(false)
 const savingEdit = ref(false)
 const editForm = ref<any | null>(null)
+const editOptionItems = ref<ProductOptionDraft[]>([])
+const editOptionExtra = ref<Record<string, any>>({})
 
 const skuDialogVisible = ref(false)
 const currentProduct = ref<Product | null>(null)
@@ -231,8 +292,10 @@ const skus = ref<SKU[]>([])
 const selectedSku = ref<SKU | null>(null)
 const savingSku = ref(false)
 const newSku = ref({ option_values: '{}', price_adjustment: 0, stock_quantity: 0, is_available: true })
+const newSkuSelections = ref<Record<string, string>>({})
 
 const uploadingPhotos = ref(false)
+const currentProductOptionItems = computed(() => parseManagedOptions(currentProduct.value?.options).items)
 
 function parsePhotos(s: any): string[] {
   const v = (s ?? '').toString().trim()
@@ -245,15 +308,167 @@ function parsePhotos(s: any): string[] {
   }
 }
 
+function createEmptyOptionValue(): OptionValueDraft {
+  return { zh: '', en: '' }
+}
+
+function createEmptyOption(): ProductOptionDraft {
+  return { key: '', values: [createEmptyOptionValue()] }
+}
+
+function safeParseObject(s: any): Record<string, any> {
+  const raw = (s ?? '').toString().trim()
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, any> : {}
+  } catch {
+    return {}
+  }
+}
+
+function parseManagedOptions(s: any): { items: ProductOptionDraft[]; extra: Record<string, any> } {
+  const parsed = safeParseObject(s)
+  const optionValueI18n = parsed.optionValueI18n && typeof parsed.optionValueI18n === 'object' && !Array.isArray(parsed.optionValueI18n)
+    ? parsed.optionValueI18n as Record<string, Record<string, string>>
+    : {}
+  const items: ProductOptionDraft[] = []
+  const extra: Record<string, any> = {}
+
+  Object.entries(parsed).forEach(([key, value]) => {
+    if (key === 'optionValueI18n') return
+    if (Array.isArray(value)) {
+      items.push({
+        key,
+        values: value.length
+          ? value.map((item) => {
+              const zh = String(item)
+              return { zh, en: optionValueI18n?.[key]?.[zh] || '' }
+            })
+          : [createEmptyOptionValue()],
+      })
+      return
+    }
+    extra[key] = value
+  })
+
+  return { items, extra }
+}
+
+function serializeManagedOptions(items: ProductOptionDraft[], extra: Record<string, any> = {}): string {
+  const payload: Record<string, any> = { ...extra }
+  const optionValueI18n: Record<string, Record<string, string>> = {}
+
+  items.forEach((item) => {
+    const key = item.key.trim()
+    const values = item.values
+      .map((value) => ({ zh: value.zh.trim(), en: value.en.trim() }))
+      .filter((value) => value.zh)
+
+    if (!key || !values.length) return
+
+    payload[key] = values.map((value) => value.zh)
+
+    const translatedValues = values.filter((value) => value.en)
+    if (translatedValues.length) {
+      optionValueI18n[key] = {}
+      translatedValues.forEach((value) => {
+        optionValueI18n[key][value.zh] = value.en
+      })
+    }
+  })
+
+  if (Object.keys(optionValueI18n).length) payload.optionValueI18n = optionValueI18n
+  return Object.keys(payload).length ? JSON.stringify(payload) : ''
+}
+
+function syncCreateOptions() {
+  form.value.options = serializeManagedOptions(createOptionItems.value, createOptionExtra.value)
+}
+
+function syncEditOptions() {
+  if (!editForm.value) return
+  editForm.value.options = serializeManagedOptions(editOptionItems.value, editOptionExtra.value)
+}
+
+function addCreateOption() {
+  createOptionItems.value.push(createEmptyOption())
+}
+
+function removeCreateOption(index: number) {
+  createOptionItems.value.splice(index, 1)
+}
+
+function addCreateOptionValue(index: number) {
+  createOptionItems.value[index]?.values.push(createEmptyOptionValue())
+}
+
+function removeCreateOptionValue(optionIndex: number, valueIndex: number) {
+  const values = createOptionItems.value[optionIndex]?.values
+  if (!values) return
+  values.splice(valueIndex, 1)
+  if (!values.length) values.push(createEmptyOptionValue())
+}
+
+function addEditOption() {
+  editOptionItems.value.push(createEmptyOption())
+}
+
+function removeEditOption(index: number) {
+  editOptionItems.value.splice(index, 1)
+}
+
+function addEditOptionValue(index: number) {
+  editOptionItems.value[index]?.values.push(createEmptyOptionValue())
+}
+
+function removeEditOptionValue(optionIndex: number, valueIndex: number) {
+  const values = editOptionItems.value[optionIndex]?.values
+  if (!values) return
+  values.splice(valueIndex, 1)
+  if (!values.length) values.push(createEmptyOptionValue())
+}
+
+function resetNewSkuSelections() {
+  const next: Record<string, string> = {}
+  currentProductOptionItems.value.forEach((option) => {
+    next[option.key] = ''
+  })
+  newSkuSelections.value = next
+}
+
+function buildNewSkuOptionValues(): string {
+  const payload: Record<string, string> = {}
+  for (const option of currentProductOptionItems.value) {
+    const key = option.key.trim()
+    if (!key) continue
+    const value = (newSkuSelections.value[key] || '').trim()
+    if (!value) throw new Error('missing-option')
+    payload[key] = value
+  }
+  return JSON.stringify(payload)
+}
+
+function formatOptionChoice(value: OptionValueDraft): string {
+  return value.en ? `${value.zh} / ${value.en}` : value.zh
+}
+
+watch(createOptionItems, syncCreateOptions, { deep: true })
+watch(editOptionItems, syncEditOptions, { deep: true })
+
 async function load(){
   loading.value = true
   try {
-    const { data } = await api.get('/api/admin/products', { params: q.value ? { q: q.value } : {} })
+    const params: Record<string, string | boolean> = {}
+    if (q.value) params.q = q.value
+    if (searchById.value) params.search_by_id = true
+    const { data } = await api.get('/api/admin/products', { params })
     list.value = data
   } finally { loading.value = false }
 }
 
 async function create(){
+  syncCreateOptions()
   if (!form.value.title || !form.value.base_price || !form.value.title_en) {
     ElMessage.warning(t('msg.fillRequired'))
     return
@@ -273,6 +488,8 @@ async function create(){
   try {
     await api.post('/api/admin/products', form.value)
     form.value = { title:'', title_en:'', author:'', author_en:'', publisher:'', publisher_en:'', base_price: 0, is_active: true, description:'', description_en:'', options:'' }
+    createOptionItems.value = []
+    createOptionExtra.value = {}
     await load()
   } catch(e:any){
     ElMessage.error(extractErrorMessage(e, t('msg.saveFailed')))
@@ -293,6 +510,8 @@ function parseOption(s: string){
 
 async function openSkuDialog(p: Product){
   currentProduct.value = p
+  resetNewSkuSelections()
+  newSku.value = { option_values: '{}', price_adjustment: 0, stock_quantity: 0, is_available: true }
   skuDialogVisible.value = true
   await fetchSkus()
   selectedSku.value = skus.value?.[0] || null
@@ -368,14 +587,17 @@ async function deletePhoto(path: string){
 
 async function createSku(){
   if (!currentProduct.value) return
-  if (!safeJsonOrEmpty(newSku.value.option_values)) {
-    ElMessage.warning(t('msg.invalidJson'))
+  try {
+    newSku.value.option_values = buildNewSkuOptionValues()
+  } catch {
+    ElMessage.warning(t('msg.fillRequired'))
     return
   }
   savingSku.value = true
   try {
     await api.post(`/api/admin/products/${currentProduct.value.id}/skus`, newSku.value)
     newSku.value = { option_values: '{}', price_adjustment: 0, stock_quantity: 0, is_available: true }
+    resetNewSkuSelections()
     await fetchSkus()
   } catch(e:any){
     ElMessage.error(extractErrorMessage(e, t('msg.saveFailed')))
@@ -392,11 +614,16 @@ function safeJsonOrEmpty(s: any): boolean {
 
 function openEdit(p: Product) {
   editForm.value = JSON.parse(JSON.stringify(p))
+  const parsed = parseManagedOptions(editForm.value.options)
+  editOptionItems.value = parsed.items
+  editOptionExtra.value = parsed.extra
+  syncEditOptions()
   editVisible.value = true
 }
 
 async function saveEdit() {
   if (!editForm.value) return
+  syncEditOptions()
   if (!editForm.value.title || !editForm.value.base_price || !editForm.value.title_en) {
     ElMessage.warning(t('msg.fillRequired'))
     return
@@ -441,4 +668,16 @@ onMounted(load)
 .mb16{ margin-bottom:16px }
 .photoGrid{ margin-top:12px; display:flex; flex-wrap:wrap; gap:12px }
 .photoItem{ width:110px; padding:8px; background:#ffffff; border:1px solid var(--el-border-color-light); border-radius:10px; box-shadow: 0 6px 14px rgba(24,52,110,0.06); }
+.optionBuilder{ width:100% }
+.optionCard{ padding:14px; margin-bottom:12px; background:#fafbfd; border:1px solid var(--el-border-color-light); border-radius:12px }
+.optionHeader{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; margin-bottom:10px }
+.optionValueRow{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:10px; align-items:center; margin-bottom:8px }
+.optionActions{ margin-top:8px }
+.helperText{ color:#7a8191; line-height:1.5 }
+.skuOptionBuilder{ width:100% }
+.skuOptionRow{ display:grid; grid-template-columns:120px minmax(0,1fr); gap:12px; align-items:center; margin-bottom:10px }
+.skuOptionLabel{ color:var(--el-text-color-regular); font-weight:600 }
+@media (max-width: 768px){
+  .optionHeader,.optionValueRow,.skuOptionRow{ grid-template-columns:1fr }
+}
 </style>

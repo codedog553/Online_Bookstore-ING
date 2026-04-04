@@ -37,7 +37,6 @@
               <el-dropdown-item @click="goOrders">{{ t('app.myOrders') }}</el-dropdown-item>
               <el-dropdown-item v-if="user?.is_admin" @click="goAdminProducts">{{ t('app.adminProducts') }}</el-dropdown-item>
               <el-dropdown-item v-if="user?.is_admin" @click="goAdminOrders">{{ t('app.adminOrders') }}</el-dropdown-item>
-              <el-dropdown-item v-if="user?.is_admin" @click="goAdminReviews">{{ t('app.adminReviews') }}</el-dropdown-item>
               <el-dropdown-item v-if="user?.is_admin" @click="goAdminReports">{{ t('app.adminReports') }}</el-dropdown-item>
               <el-dropdown-item divided @click="logout">{{ t('app.logout') }}</el-dropdown-item>
             </el-dropdown-menu>
@@ -93,7 +92,6 @@ function logout() {
 function goOrders() { router.push('/orders') }
 function goAdminProducts() { router.push('/admin/products') }
 function goAdminOrders() { router.push('/admin/orders') }
-function goAdminReviews() { router.push('/admin/reviews') }
 function goAdminReports() { router.push('/admin/reports') }
 
 const currentLangLabel = computed(() => {

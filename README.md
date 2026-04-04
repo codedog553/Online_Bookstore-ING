@@ -43,15 +43,22 @@ conda activate Qchat
 cd backend
 pip install -r requirements.txt
 
-:: 重置/初始化示例数据（会清库重建）
+:: 完整重置/初始化示例数据（会清库重建并刷新图片）
 :: 注意：该命令会：
 :: 1) 清空数据库所有业务表数据（包括订单状态时间线 B4，避免重复）；
 :: 2) 清空本地上传目录 backend/app/uploads（包括你手动上传的图片）。
-:: 默认会生成 60 个商品，便于前端分页演示（A5，size=20 -> 至少 3 页）。
+:: seed 会优先使用开源来源的真实书籍信息与真实封面，并缓存到本地后复制到 uploads；
+:: 若部分封面下载失败，会回退到仓库内置的真实 jpg 封面，而不是生成 txt 占位文件。
+:: 默认会生成 24 个真实书籍商品，可直接用于前端分页、详情页和后台商品管理演示。
 python -m app.seed
 
-:: （可选）如需生成更多商品（例如 120 个），可通过环境变量调整：
-:: 注意：再次运行仍然会“清库重建 + 清空 uploads”。
+:: 轻量重置：只重置数据库业务数据，不清 uploads，不下载图片
+:: 适合开发时快速恢复账号/商品/订单数据
+python -m app.seed_no_images
+
+:: （可选）如需生成更多商品（例如 20 个），可通过环境变量调整：
+:: 对 `app.seed` 来说，仍然会“清库重建 + 清空 uploads”；
+:: 对 `app.seed_no_images` 来说，只会清库，不会清 uploads，也不会下载图片。
 set SEED_PRODUCT_COUNT=120
 python -m app.seed
 set SEED_PRODUCT_COUNT=
@@ -62,6 +69,8 @@ uvicorn app.main:app --reload --port 8001
 
 - 后端默认挂载：`http://localhost:8001`
 - 图片静态路径：`http://localhost:8001/uploads/...`（见 `backend/app/main.py`）
+- seed 真实书籍样本：`backend/app/seed_data/books.json`
+- seed 封面缓存目录：`backend/app/seed_image_cache/`；首次运行可能因下载真实封面而稍慢
 
 ### 2.2 前端（Vue3）
 

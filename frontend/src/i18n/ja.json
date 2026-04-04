@@ -28,7 +28,6 @@
     "myOrders": "注文履歴",
     "adminProducts": "管理 - 商品",
     "adminOrders": "管理 - 注文",
-    "adminReviews": "管理 - レビュー",
     "adminReports": "管理 - レポート"
   },
   "auth": {
@@ -62,7 +61,23 @@
     "noReviews": "レビューはありません",
     "rating": "評価",
     "comment": "コメント",
-    "submit": "送信"
+    "submit": "送信",
+    "ratings": "評価",
+    "comments": "コメント",
+    "submitRating": "評価を送信",
+    "submitComment": "コメント投稿",
+    "reply": "返信",
+    "replyComment": "コメントに返信",
+    "like": "いいね",
+    "sortByLikes": "いいね順",
+    "sortByTime": "新着順",
+    "reviewSort": "並び順",
+    "myRatingQuota": "残り評価回数",
+    "canComment": "受取完了済み注文があればコメントできます",
+    "ratingOrder": "完了済み注文",
+    "noRatingQuota": "評価可能回数はありません",
+    "noComments": "コメントはまだありません",
+    "likes": "いいね数"
   },
   "cart": {
     "title": "カート",
@@ -122,12 +137,12 @@
   "admin": {
     "productsTitle": "管理 - 商品管理",
     "ordersTitle": "管理 - 注文管理",
-    "reviewsTitle": "管理 - レビュー管理",
     "reportsTitle": "管理 - 売上レポート",
     "newProduct": "商品追加",
     "editProduct": "商品編集",
     "search": "検索",
     "keyword": "キーワード",
+    "searchById": "IDで検索",
     "id": "ID",
     "title": "タイトル",
     "titleEn": "タイトル(英)",
@@ -139,6 +154,16 @@
     "descriptionEn": "説明(英)",
     "imagesJson": "画像(JSON)",
     "optionsJson": "オプション(JSON)",
+    "optionsConfig": "商品オプション",
+    "noProductOptions": "商品オプションを追加しない場合は、デフォルト SKU が作成されます。",
+    "optionNamePlaceholder": "オプション名。例: 版型",
+    "optionValuePlaceholder": "オプション値。例: 文庫",
+    "optionValueEnPlaceholder": "英語表示。例: Paperback",
+    "addOption": "オプション追加",
+    "addOptionValue": "値を追加",
+    "optionsBuilderHint": "フォームで商品オプションを設定すると、バックエンド用 JSON は自動生成されます。",
+    "optionSelection": "SKU オプション",
+    "simpleSkuHint": "この商品には設定可能なオプションがないため、デフォルト SKU が作成されます。",
     "save": "保存",
     "back": "戻る",
     "ship": "発送済みにする",
@@ -202,5 +227,9 @@
     ,"addToCartFailed": "カート追加に失敗しました（ログインが必要かもしれません）"
     ,"reviewFailed": "レビューに失敗しました（購入後のみ投稿可能）"
     ,"saveAddressSuccess": "住所を保存しました"
+    ,"ratingFailed": "評価に失敗しました"
+    ,"commentFailed": "コメント投稿に失敗しました"
+    ,"replyFailed": "返信に失敗しました"
+    ,"likeFailed": "いいねに失敗しました"
   }
 }

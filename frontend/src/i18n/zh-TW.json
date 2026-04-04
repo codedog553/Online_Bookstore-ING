@@ -28,7 +28,6 @@
     "myOrders": "我的訂單",
     "adminProducts": "後台-商品",
     "adminOrders": "後台-訂單",
-    "adminReviews": "後台-評論",
     "adminReports": "後台-報表"
   },
   "auth": {
@@ -62,7 +61,23 @@
     "noReviews": "暫無評論",
     "rating": "評分",
     "comment": "評論內容",
-    "submit": "提交"
+    "submit": "提交",
+    "ratings": "評分",
+    "comments": "評論",
+    "submitRating": "提交評分",
+    "submitComment": "發表評論",
+    "reply": "回覆",
+    "replyComment": "回覆評論",
+    "like": "按讚",
+    "sortByLikes": "按讚數排序",
+    "sortByTime": "按時間排序",
+    "reviewSort": "排序方式",
+    "myRatingQuota": "剩餘評分次數",
+    "canComment": "完成收貨後即可評論",
+    "ratingOrder": "已完成訂單",
+    "noRatingQuota": "目前沒有可用評分次數",
+    "noComments": "暫無評論",
+    "likes": "按讚數"
   },
   "cart": {
     "title": "購物車",
@@ -116,12 +131,12 @@
   "admin": {
     "productsTitle": "後台 - 商品管理",
     "ordersTitle": "後台 - 訂單管理",
-    "reviewsTitle": "後台 - 評論管理",
     "reportsTitle": "後台 - 銷售報表",
     "newProduct": "新增商品",
     "editProduct": "編輯商品",
     "search": "搜尋",
     "keyword": "關鍵字",
+    "searchById": "按 ID 查找",
     "id": "ID",
     "title": "書名",
     "titleEn": "書名(英文)",
@@ -133,6 +148,16 @@
     "descriptionEn": "描述(英文)",
     "imagesJson": "圖片(JSON)",
     "optionsJson": "選項(JSON)",
+    "optionsConfig": "商品選項",
+    "noProductOptions": "未新增商品選項時，將建立預設 SKU。",
+    "optionNamePlaceholder": "選項名，例如 版本",
+    "optionValuePlaceholder": "選項值，例如 平裝",
+    "optionValueEnPlaceholder": "英文顯示，例如 Paperback",
+    "addOption": "新增選項",
+    "addOptionValue": "新增選項值",
+    "optionsBuilderHint": "用表單設定商品選項，系統會自動產生後端所需 JSON。",
+    "optionSelection": "SKU 選項",
+    "simpleSkuHint": "目前商品沒有可配置選項，將建立預設 SKU（無選項值）。",
     "save": "保存",
     "back": "返回",
     "ship": "標記發貨",
@@ -196,6 +221,10 @@
     ,"addToCartFailed": "加入失敗（可能需要登入）"
     ,"reviewFailed": "評論失敗（需購買後評論）"
     ,"saveAddressSuccess": "地址已保存"
+    ,"ratingFailed": "評分失敗"
+    ,"commentFailed": "評論失敗"
+    ,"replyFailed": "回覆失敗"
+    ,"likeFailed": "按讚失敗"
   }
   ,"status": {
     "pending": "待處理",

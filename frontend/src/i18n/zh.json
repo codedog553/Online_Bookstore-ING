@@ -28,7 +28,6 @@
     "myOrders": "我的订单",
     "adminProducts": "后台-商品",
     "adminOrders": "后台-订单",
-    "adminReviews": "后台-评论",
     "adminReports": "后台-报表"
   },
   "auth": {
@@ -62,7 +61,23 @@
     "noReviews": "暂无评论",
     "rating": "评分",
     "comment": "评论内容",
-    "submit": "提交"
+    "submit": "提交",
+    "ratings": "评分",
+    "comments": "评论",
+    "submitRating": "提交评分",
+    "submitComment": "发表评论",
+    "reply": "回复",
+    "replyComment": "回复评论",
+    "like": "点赞",
+    "sortByLikes": "按点赞排序",
+    "sortByTime": "按时间排序",
+    "reviewSort": "排序方式",
+    "myRatingQuota": "剩余评分次数",
+    "canComment": "完成收货后即可评论",
+    "ratingOrder": "已完成订单",
+    "noRatingQuota": "暂无可用评分次数",
+    "noComments": "暂无评论",
+    "likes": "点赞数"
   },
   "cart": {
     "title": "购物车",
@@ -116,12 +131,12 @@
   "admin": {
     "productsTitle": "后台 - 商品管理",
     "ordersTitle": "后台 - 订单管理",
-    "reviewsTitle": "后台 - 评论管理",
     "reportsTitle": "后台 - 销售报表",
     "newProduct": "新增商品",
     "editProduct": "编辑商品",
     "search": "搜索",
     "keyword": "关键字",
+    "searchById": "按 ID 查找",
     "id": "ID",
     "title": "书名",
     "titleEn": "书名(英文)",
@@ -135,6 +150,16 @@
     "imagesJsonHint": "例如 [\"https://...\",\"https://...\"]（可留空）",
     "optionsJson": "选项(JSON)",
     "optionsJsonHint": "例如 {\"version\":[\"平装\",\"精装\"],\"optionValueI18n\":{\"version\":{\"平装\":\"Paperback\",\"精装\":\"Hardcover\"}}}",
+    "optionsConfig": "商品选项",
+    "noProductOptions": "未添加商品选项时，将创建默认 SKU。",
+    "optionNamePlaceholder": "选项名，例如 版本",
+    "optionValuePlaceholder": "选项值，例如 平装",
+    "optionValueEnPlaceholder": "英文显示，例如 Paperback",
+    "addOption": "添加选项",
+    "addOptionValue": "添加选项值",
+    "optionsBuilderHint": "按表单配置商品选项，系统会自动生成后端需要的 JSON。",
+    "optionSelection": "SKU 选项",
+    "simpleSkuHint": "当前商品没有配置选项，将创建默认 SKU（无选项值）。",
     "save": "保存",
     "back": "返回",
     "ship": "标记发货",
@@ -200,6 +225,10 @@
     ,"reviewFailed": "评论失败（需购买后评论）"
     ,"saveAddressSuccess": "地址已保存"
     ,"loginToReview": "登录后才能发表评论"
+    ,"ratingFailed": "评分失败"
+    ,"commentFailed": "评论失败"
+    ,"replyFailed": "回复失败"
+    ,"likeFailed": "点赞失败"
   }
   ,"status": {
     "pending": "待处理",
