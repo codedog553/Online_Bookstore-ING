@@ -1,473 +1,1293 @@
 # 在线书店系统（本地运行版）
 
-本项目为课程作业性质：**不需要部署，仅本地运行；不考虑性能，只实现业务功能与可追踪的需求实现。**
+本项目为课程作业性质的在线书店系统，目标是在本地环境中实现一个具备完整业务闭环、可追踪需求编号、可进行功能讲解与演示的电商原型。系统围绕“商品浏览—购物车—下单—订单处理—后台管理—国际化展示”展开，采用前后端分离架构，并额外引入基于 DeepSeek 官方 API 的智能体微服务，用于实现自然语言书籍问答、推荐与受控购物车操作。
 
-- 后端：FastAPI + SQLAlchemy + SQLite（`backend/app.db`）
+项目强调以下几点：
+
+- **仅本地运行，不要求部署上线**；
+- **优先保证业务完整性与可验收性，不以高性能为目标**；
+- **实现路径可追踪**，可通过需求编号定位代码；
+- **具备报告撰写价值**，可作为系统设计、数据库设计、接口设计、状态机设计的完整案例。
+
+- 后端：FastAPI + SQLAlchemy + SQLite（可扩展 PostgreSQL）
 - 前端：Vue 3 + Vite + Element Plus + Pinia + vue-i18n
+- 智能体微服务：FastAPI + DeepSeek API + 本地只读检索/购物车安全操作
 
 > 说明：你可以在代码中通过全局搜索 `A1` / `B2` / `D5` / `W2` 等标记，快速定位对应需求的关键实现点。
 
 ---
 
-## 1. 目录结构
+## 1. 项目背景与建设目标
+
+### 1.1 项目背景
+
+传统课程项目中的“在线书店”通常只覆盖商品列表与简单下单，难以体现完整的领域建模、状态流转、安全边界与交互设计。本项目在经典电商业务基础上，加入了以下扩展：
+
+- 可配置商品与 SKU 维度库存管理；
+- 本地文件图片上传与多图展示；
+- 订单状态流转与状态时间线；
+- 中英双语商品信息与多语言界面；
+- 智能体微服务，用于自然语言交互与受控的数据操作。
+
+### 1.2 建设目标
+
+系统的目标不是构建一个商用生产平台，而是构建一个**结构清晰、业务完整、便于展示与说明**的本地电商原型。具体目标如下：
+
+1. 支持顾客完成注册、浏览、搜索、加购、下单、查看订单全流程；
+2. 支持管理员完成商品维护、SKU 维护、图片维护、订单处理；
+3. 支持国际化界面与双语商品信息展示；
+4. 通过独立智能体微服务实现自然语言问答、推荐和受控购物车操作；
+5. 通过清晰的数据库设计、API 设计与状态机设计，使项目具备报告文档抓手。
+
+---
+
+## 2. 目录结构
 
 ```text
-F:\ISPproject
-├─ backend\                 # FastAPI 后端
-│  ├─ app\
-│  │  ├─ routers\          # 业务 API（auth/products/cart/orders/admin/...）
-│  │  ├─ models.py          # ORM 模型（User/Product/SKU/Order/...）
-│  │  ├─ schemas.py         # Pydantic schema（请求/响应）
-│  │  ├─ uploads\          # 本地上传图片存储（按 sku_{id} 目录）
-│  │  └─ main.py            # 应用入口（含 /uploads 静态文件挂载）
+F:\Online_Bookstore-ING-master
+├─ backend/                    # 主业务后端（FastAPI）
+│  ├─ app/
+│  │  ├─ routers/             # auth/products/cart/orders/admin/... 业务接口
+│  │  ├─ models.py            # 主业务 ORM 模型
+│  │  ├─ schemas.py           # 主业务请求/响应模型
+│  │  ├─ uploads/             # 本地 SKU 图片存储目录
+│  │  └─ main.py              # 主业务应用入口
 │  └─ requirements.txt
-└─ frontend\                # Vue3 前端
-   ├─ src\i18n\            # W1：UI 文案多语言 JSON
-   ├─ src\utils\productI18n.ts  # W2：商品信息双语展示规则
-   ├─ src\views\           # 页面（Products/Cart/Orders/Admin...）
-   └─ package.json
+├─ frontend/                   # 前端（Vue3 + Vite）
+│  ├─ src/components/         # 通用组件（含 AgentAssistant）
+│  ├─ src/views/              # 页面视图（Products/Cart/Orders/Admin...）
+│  ├─ src/api/                # HTTP/agent 接口封装
+│  ├─ src/i18n/               # 多语言文案资源
+│  └─ package.json
+├─ agentserver/                # 智能体微服务（FastAPI）
+│  ├─ app/
+│  │  ├─ api.py               # 智能体 REST 接口
+│  │  ├─ services/            # DeepSeek、Skills、对话上下文、限流等
+│  │  ├─ repositories/        # 书籍只读检索、购物车受控操作
+│  │  ├─ schemas.py           # 智能体接口模型
+│  │  └─ main.py              # 智能体服务入口
+│  ├─ tests/
+│  └─ README.md
+└─ README.md                   # 项目总说明文档
 ```
 
 ---
 
-## 2. 运行环境与启动方式
+## 3. 系统架构设计
 
-### 2.1 后端（FastAPI）
+### 3.1 总体架构
 
-> 环境：你要求使用 `conda activate Qchat`。
+系统采用“前端 + 主业务后端 + 智能体微服务 + 本地数据库/文件系统”的分层架构。
+
+```text
+┌───────────────────────────────────────────────┐
+│                 Vue Frontend                  │
+│ Products / Cart / Checkout / Orders / Admin  │
+│ AgentAssistant 聊天抽屉与确认弹窗             │
+└───────────────────────────────────────────────┘
+                │                    │
+      普通业务 REST API         智能体交互 REST API
+                │                    │
+                ▼                    ▼
+┌──────────────────────┐    ┌─────────────────────────┐
+│   Backend FastAPI    │    │ Agentserver FastAPI     │
+│ auth/products/cart   │    │ chat / cart add/update  │
+│ orders/admin/...     │    │ remove / list / csrf    │
+└──────────────────────┘    └─────────────────────────┘
+                │                    │
+                └────────────┬───────┘
+                             ▼
+                  SQLite / PostgreSQL
+                    + 本地 uploads 文件
+```
+
+### 3.2 模块职责划分
+
+#### 3.2.1 前端（frontend）
+
+前端负责所有页面展示、状态交互、用户输入收集与多语言切换，核心职责包括：
+
+- 商品浏览、搜索、分页与详情展示；
+- 购物车页面与订单页面渲染；
+- 管理端商品、SKU、订单管理页面；
+- 调用主业务后端完成常规业务请求；
+- 调用 `agentserver` 完成自然语言聊天、购物车智能确认与执行。
+
+#### 3.2.2 主业务后端（backend）
+
+主业务后端负责系统核心业务逻辑，是整个书店系统的主服务层。其职责包括：
+
+- 用户认证与授权；
+- 商品、SKU、图片、评论、评分、订单、后台管理；
+- 常规购物车 CRUD、订单创建与状态流转；
+- 文件静态挂载与本地数据初始化。
+
+#### 3.2.3 智能体微服务（agentserver）
+
+智能体微服务不是主业务后端的替代者，而是位于前端与后端/数据库之间的**自然语言交互增强层**。它的职责包括：
+
+- 使用 DeepSeek 官方 API 处理用户自然语言输入；
+- 维护多轮会话上下文；
+- 读取商品、SKU 等只读信息做问答与推荐；
+- 对购物车增删改查进行安全受控调用；
+- 在执行变更前返回确认语句，由前端展示确认弹窗；
+- 只允许访问白名单能力，不暴露支付、admin、敏感用户数据能力。
+
+### 3.3 模块交互方式
+
+系统存在两类主要交互路径：
+
+#### 3.3.1 常规业务路径
+
+```text
+Frontend -> Backend -> Database
+```
+
+适用场景：
+
+- 用户注册/登录；
+- 商品浏览与搜索；
+- 常规购物车页面请求；
+- 订单查询与下单；
+- 后台商品/订单管理。
+
+#### 3.3.2 智能体交互路径
+
+```text
+Frontend -> Agentserver -> (DeepSeek API + Database)
+```
+
+适用场景：
+
+- 自然语言书籍问答；
+- 自然语言推荐与检索；
+- 自然语言触发的购物车增删改查；
+- 智能体生成确认语句并驱动前端弹窗。
+
+### 3.4 智能体与主系统的边界
+
+为避免系统边界混乱，项目对职责做如下约束：
+
+- **普通页面业务**：优先走主业务后端；
+- **智能体聊天与推荐**：走 `agentserver`；
+- **智能体触发的 cart CRUD**：走 `agentserver`；
+- **支付、订单创建、admin 操作**：不通过智能体执行；
+- **智能体只对白名单数据库能力开放**：商品只读查询 + 购物车 CRUD。
+
+### 3.5 架构设计决策说明
+
+从报告角度看，本系统的架构设计（Architectural Design）主要回答“系统由哪些高层模块构成、模块之间如何协作以及为何如此拆分”的问题。当前架构的关键设计决策包括：
+
+1. **前后端分离**：前端专注视图、交互与状态展示，后端专注业务规则与数据访问，降低耦合；
+2. **主业务后端与智能体微服务分离**：避免将自然语言处理逻辑直接耦合到主业务服务中，使安全边界、调用链和部署职责更清晰；
+3. **商品层与 SKU 层分离**：支持一本书多个版本/配置、多库存、多图片的现实需求；
+4. **状态实体与状态事件并存**：订单既保留当前状态，也保留状态时间线，兼顾查询效率与可追溯性；
+5. **本地文件存储与数据库分离**：图片文件存放在 `uploads/`，数据库只存路径与关联关系，避免二进制膨胀数据库。
+
+该设计兼顾了课程项目的可实现性与文档报告的完整性：结构足够真实、边界足够清晰、说明足够充分。
+
+---
+
+## 4. 运行环境与启动方式
+
+### 4.1 后端（FastAPI）
+
+> 环境：使用 `conda activate Qchat`
 
 ```bat
-cd F:\ISPproject
+cd F:\Online_Bookstore-ING-master
 conda activate Qchat
 
 cd backend
 pip install -r requirements.txt
 
-:: 完整重置/初始化示例数据（会清库重建并刷新图片）
-:: 注意：该命令会：
-:: 1) 清空数据库所有业务表数据（包括订单状态时间线 B4，避免重复）；
-:: 2) 清空本地上传目录 backend/app/uploads（包括你手动上传的图片）。
-:: seed 会优先使用开源来源的真实书籍信息与真实封面，并缓存到本地后复制到 uploads；
-:: 若部分封面下载失败，会回退到仓库内置的真实 jpg 封面，而不是生成 txt 占位文件。
-:: 默认会生成 24 个真实书籍商品，可直接用于前端分页、详情页和后台商品管理演示。
 python -m app.seed
-
-:: 轻量重置：只重置数据库业务数据，不清 uploads，不下载图片
-:: 适合开发时快速恢复账号/商品/订单数据
-python -m app.seed_no_images
-
-:: （可选）如需生成更多商品（例如 20 个），可通过环境变量调整：
-:: 对 `app.seed` 来说，仍然会“清库重建 + 清空 uploads”；
-:: 对 `app.seed_no_images` 来说，只会清库，不会清 uploads，也不会下载图片。
-set SEED_PRODUCT_COUNT=120
-python -m app.seed
-set SEED_PRODUCT_COUNT=
-
-:: 启动后端
 uvicorn app.main:app --reload --port 8001
 ```
 
-- 后端默认挂载：`http://localhost:8001`
-- 图片静态路径：`http://localhost:8001/uploads/...`（见 `backend/app/main.py`）
-- seed 真实书籍样本：`backend/app/seed_data/books.json`
-- seed 封面缓存目录：`backend/app/seed_image_cache/`；首次运行可能因下载真实封面而稍慢
+- 主业务后端地址：`http://localhost:8001`
+- 图片静态路径：`http://localhost:8001/uploads/...`
 
-### 2.2 前端（Vue3）
+### 4.2 前端（Vue3）
 
 ```bat
-cd F:\ISPproject\frontend
+cd F:\Online_Bookstore-ING-master\frontend
 npm install
 npm run dev
 ```
 
-前端默认：`http://localhost:5173`
+- 前端地址：`http://localhost:5173`
 
-#### 前端如何配置后端地址
-
-当前前端代码（`frontend/src/api/http.ts`）默认指向：`http://localhost:8001`。
-
-如果你把后端跑在别的端口/地址，请在 `frontend/.env.local` 中配置：
+前端可通过 `frontend/.env.local` 配置主业务后端地址：
 
 ```env
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8001
+VITE_AGENT_API_BASE_URL=http://localhost:8011
 ```
+
+### 4.3 智能体微服务（agentserver）
+
+```bat
+cd F:\Online_Bookstore-ING-master\agentserver
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8011
+```
+
+- 智能体服务地址：`http://localhost:8011`
+- Swagger：`http://localhost:8011/docs`
+- OpenAPI：`http://localhost:8011/openapi.json`
 
 ---
 
-## 3. 内置账号
+## 5. 内置账号
 
 - 管理员（Vendor/Admin）：`admin@demo.com` / `Admin1234`
 - 普通用户（Customer）：`user@demo.com` / `User1234`
 
 ---
 
-## 4. 需求实现对照（按编号可追踪）
+## 6. 数据库设计
 
-> 下面是“你给的需求编号”与“代码关键位置”的对照。更细节的说明已写入源码注释中（只加注释、不改逻辑）。
+### 6.1 设计原则
 
-### 4.1 A（Customer：账号/浏览/购物车/订单）
+数据库设计围绕以下原则展开：
 
-- **A1 注册（姓名/邮箱/密码/收货地址） + last address 规则**
-  - 后端：`backend/app/routers/auth.py`、`backend/app/routers/addresses.py`、`backend/app/routers/orders.py`
-  - 前端：`frontend/src/views/Register.vue`、`frontend/src/views/Checkout.vue`
+1. **以商品 + SKU 分层表达可配置商品**；
+2. **购物车、订单项均绑定 SKU，而不是只绑定 Product**；
+3. **订单状态既存当前值，也存历史事件**；
+4. **地址、订单、评论等数据保持完整关系链**；
+5. **兼容 SQLite，但结构可迁移到 PostgreSQL**。
 
-- **A2 未登录可浏览商品；登录后才可使用 cart/order/admin**
-  - 前端路由守卫：`frontend/src/router/index.ts`
-  - 后端鉴权依赖：`backend/app/deps.py`
+### 6.2 核心表结构
 
-- **A3 商品列表（书名/价格/缩略图）**
-  - 前端：`frontend/src/views/Products.vue`
-  - 后端：`backend/app/routers/products.py`（动态计算 `thumbnail_url`）
+以下为系统最核心的数据表。
 
-- **A4 搜索（按书名）**
-  - 前端：`Products.vue` keyword
-  - 后端：`GET /api/products?keyword=...`
+#### 6.2.1 用户与地址
 
-- **A5 长列表导航（分页）**
-  - 前端：`el-pagination`
-  - 后端：`GET /api/products?page&size` 返回 `total`
+**users**
 
-- **A6 商品详情额外属性（作者/出版方/简介等）**
-  - 前端：`frontend/src/views/ProductDetail.vue`
-  - 后端模型：`backend/app/models.py::Product`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Integer PK | 用户主键 |
+| full_name | String(100) | 用户姓名 |
+| email | String(100) UNIQUE INDEX | 登录邮箱 |
+| password_hash | String(255) | 密码哈希 |
+| default_address_id | FK -> addresses.id | 上一次地址 |
+| language | String(5) | 用户语言偏好 |
+| is_admin | Boolean | 是否管理员 |
+| created_at / updated_at | DateTime | 创建与更新时间 |
 
-- **A7~A10 购物车增删改查**
-  - 后端：`backend/app/routers/cart.py`
-  - 前端：`frontend/src/views/Cart.vue`
+**addresses**
 
-- **A11 结算下单：创建订单并清空购物车**
-  - 后端：`backend/app/routers/orders.py::create_order`
-  - 前端：`frontend/src/views/Checkout.vue`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Integer PK | 地址主键 |
+| user_id | FK -> users.id | 所属用户 |
+| receiver_name | String(100) | 收货人 |
+| phone | String(20) | 电话 |
+| province/city/district | String | 省市区 |
+| detail_address | String(255) | 详细地址 |
+| is_default | Boolean | 是否默认 |
 
-- **A12 订单列表（倒序）**
-  - 后端：`backend/app/routers/orders.py::list_my_orders`
-  - 前端：`frontend/src/views/Orders.vue`
+#### 6.2.2 商品与 SKU
 
-- **A13 订单详情：地址快照 + 行项目快照 + 状态时间线**
-  - 后端：`backend/app/models.py::Order(ship_*)`、`orders.py::get_order`
-  - 前端：`frontend/src/views/OrderDetail.vue`
+**categories**
 
-- **A14~A18 Vendor 商品管理（浏览/搜索/新增/编辑/上下架）**
-  - 后端：`backend/app/routers/admin.py`
-  - 前端：`frontend/src/views/admin/AdminProducts.vue`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Integer PK | 分类主键 |
+| name | String(100) | 分类名 |
+| parent_id | FK -> categories.id | 父分类 |
+| sort_order | Integer | 排序 |
+| is_active | Boolean | 是否启用 |
 
-- **A15 按商品 ID 子串搜索**
-  - 后端：`admin.py::list_all_products`（`cast(Product.id, String).like`）
+**products**
 
-- **A19~A20 Vendor 订单列表/详情**
-  - 后端：`admin.py::admin_list_orders/admin_get_order`
-  - 前端：`frontend/src/views/admin/AdminOrders.vue`、`AdminOrderDetail.vue`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Integer PK | 商品主键 |
+| title/title_en | String(200) | 双语书名 |
+| author/author_en | String(100) | 双语作者 |
+| publisher/publisher_en | String(200) | 双语出版方 |
+| base_price | Numeric(10,2) | 基础价格 |
+| min_price/max_price | Numeric(10,2) | 最低/最高价格 |
+| description/description_en | Text | 双语简介 |
+| category_id | FK -> categories.id | 所属分类 |
+| is_active | Boolean | 上下架状态 |
+| images | Text(JSON) | 商品级图片 |
+| options | Text(JSON) | 商品可配置项 |
 
-### 4.2 B（多图 + 订单处理）
+**product_skus**
 
-- **B1 每个 SKU 多图（本地上传/删除），详情页轮播展示**
-  - 后端：`backend/app/routers/admin.py::upload_sku_photos/delete_sku_photo`
-  - 静态挂载：`backend/app/main.py`（`/uploads`）
-  - 前端：`ProductDetail.vue` + `ImageCarousel.vue`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Integer PK | SKU 主键 |
+| product_id | FK -> products.id | 所属商品 |
+| option_values | Text(JSON) | 具体配置组合 |
+| price_adjustment | Numeric(10,2) | SKU 价格调整 |
+| stock_quantity | Integer | 库存 |
+| is_available | Boolean | 是否可售 |
+| photos | Text(JSON) | SKU 多图 |
 
-- **B2 订单状态流转**
-  - 状态：`pending -> shipped -> completed`；`pending -> cancelled`
-  - 自动取消：pending 超过 3 天未发货自动转 cancelled
-  - 后端：`backend/app/routers/orders.py`、`backend/app/routers/admin.py`
-  - 前端：用户取消/确认收货（`OrderDetail.vue`），vendor 发货/取消（AdminOrders/AdminOrderDetail）
+#### 6.2.3 购物车与订单
 
-- **B3 按订单当前状态过滤**
-  - 后端：`GET /api/orders?status=...`
-  - 前端：`Orders.vue` 当前使用前端过滤（代码中有注释说明）
+**cart_items**
 
-- **B4 状态时间线（状态名 + 时间点）**
-  - 后端：`backend/app/models.py::OrderStatusEvent` + `status_events`
-  - 前端：订单详情页 timeline 展示
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Integer PK | 购物车项主键 |
+| user_id | FK -> users.id | 所属用户 |
+| sku_id | FK -> product_skus.id | 绑定 SKU |
+| quantity | Integer | 数量 |
+| created_at / updated_at | DateTime | 创建与更新时间 |
 
-### 4.3 D（可配置商品 / SKU / 库存）
+**orders**
 
-- **D1 可配置商品（至少 1 个 option）**
-  - `Product.options` 以 JSON 保存选项结构（例如版本）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| order_id | String(20) PK | 订单号 |
+| user_id | FK -> users.id | 所属用户 |
+| address_id | FK -> addresses.id | 地址关联 |
+| ship_* | String | 收货信息快照 |
+| total_amount | Numeric(10,2) | 总金额 |
+| status | String(20) | 当前状态 |
+| shipped_at/completed_at/cancelled_at | DateTime | 关键状态时间 |
 
-- **D2 加购必须选择每个 option，并可用图片区分配置**
-  - 前端：`ProductDetail.vue`（必须选择后才能匹配 SKU）
-  - 后端：`GET /api/products/{id}/photos` 返回 by_sku 图片映射
+**order_items**
 
-- **D3 同一商品可买多个配置组合 + 数量可 > 1**
-  - 购物车以 `sku_id` 为粒度：`CartItem.sku_id`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Integer PK | 订单项主键 |
+| order_id | FK -> orders.order_id | 所属订单 |
+| sku_id | FK -> product_skus.id | 所属 SKU |
+| quantity | Integer | 数量 |
+| unit_price | Numeric(10,2) | 下单时单价 |
+| option_values | Text(JSON) | SKU 配置快照 |
 
-- **D4 每个配置组合是独立 SKU，独立库存/可售状态**
-  - 后端：`ProductSKU(stock_quantity/is_available)` + 管理端 SKU CRUD
+**order_status_events**
 
-- **D5 缺货/不可售提示与拦截**
-  - 后端：加入购物车/更新数量/下单都校验库存与可售
-  - 前端：`Cart.vue`/`Checkout.vue` 有红色提示并禁用下单
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Integer PK | 事件主键 |
+| order_id | FK -> orders.order_id | 所属订单 |
+| status | String(20) | 状态名 |
+| note | String(255) | 补充说明 |
+| created_at | DateTime | 事件发生时间 |
 
-### 4.4 W（国际化）
+### 6.3 索引策略
 
-- **W1 非商品信息：多语言 JSON 映射 + UI 语言切换**
-  - `frontend/src/i18n/zh.json/en.json/ja.json/zh-TW.json`
-  - `frontend/src/App.vue` 提供切换按钮，写入 `localStorage(lang)`
+系统当前主要采用如下索引策略：
 
-- **W2 商品信息：双语录入 + 展示规则**
-  - 后端：商品字段保存中英双语（`title/title_en/author/author_en/...`），并在创建/编辑时强制输入（schema 层约束）
-  - 前端：`frontend/src/utils/productI18n.ts` 实现规则：
-    - locale 为 `zh` 或 `zh-TW`：商品信息统一显示中文（简体字段）
-    - 其他语言（en/ja/...）：商品信息统一显示英文
+- `users.email`：唯一索引，用于登录与注册校验；
+- `products.id`、`product_skus.id`、`cart_items.id`、`orders.order_id`：主键索引；
+- `order_status_events.order_id`：状态时间线查询；
+- 常用外键字段天然适合作为查询索引候选；
+- 管理端按商品 ID 子串查询时，通过应用层转换实现模糊匹配。
 
----
+若迁移至 PostgreSQL，建议进一步增加：
 
-## 5. 关键业务规则说明（便于验收/讲解）
+- `products(title)`、`products(title_en)` 的全文或 trigram 检索索引；
+- `cart_items(user_id, sku_id)` 联合唯一索引；
+- `orders(user_id, created_at)` 联合索引；
+- `product_skus(product_id, is_available)` 联合索引。
 
-### 5.1 “只记忆上一次地址”(last address)（A1/A11）
+### 6.4 数据关系与约束
 
-- 注册时填写的收货地址会作为用户的 **首次 last address**。
-- 结算页会调用 `GET /api/addresses/last` 预填地址。
-- 用户每次下单提交的新地址，会覆盖保存为新的 last address，供下次预填。
-- **订单中保存下单时的地址快照**（`Order.ship_*`），确保历史订单展示不受后续地址修改影响（A13）。
+核心关系如下：
 
-### 5.2 订单状态流转与时间线（B2/B4）
+- `User 1 - N Address`
+- `User 1 - N CartItem`
+- `Category 1 - N Product`
+- `Product 1 - N ProductSKU`
+- `User 1 - N Order`
+- `Order 1 - N OrderItem`
+- `Order 1 - N OrderStatusEvent`
 
-- `pending`：用户刚下单
-- `shipped`：vendor 发货（pending -> shipped）
-- `completed`：用户确认收货（shipped -> completed）
-- `cancelled`：用户取消 pending 或 vendor 取消 pending
-- 自动取消：pending 超过 3 天未发货会自动取消（在访问订单相关接口时触发扫描）
+关键业务约束包括：
 
-系统同时保存：
-- `orders.status`：当前最后状态（用于列表/过滤）
-- `order_status_events`：状态历史事件（用于详情页 timeline）
+- 一个购物车项只能属于一个用户；
+- 一个购物车项只能绑定一个 SKU；
+- 同一商品不同 SKU 可以同时存在于购物车；
+- 下单后地址与 SKU 配置必须固化为快照；
+- 订单状态变更必须同步写入状态时间线；
+- 缺货或不可售 SKU 不允许加购、改量、下单。
 
----
+### 6.5 迁移策略
 
-## 6. 手动验收流程（建议）
+当前项目使用 SQLite，以便本地运行与快速初始化。迁移策略如下：
 
-### 6.1 Customer 流程（A* + 部分 B/D/W）
+1. 开发阶段通过 SQLAlchemy 模型维护结构；
+2. 初始化与重置通过 seed 脚本完成；
+3. 若迁移至 PostgreSQL，建议引入 Alembic 管理数据库版本；
+4. 对 JSON 字段可由 SQLite 的 `TEXT` 迁移为 PostgreSQL 原生 `JSONB`；
+5. 对 ENUM/状态字段可进一步收敛为数据库层枚举或检查约束。
 
-1. 未登录访问 `/products`：可浏览列表/搜索/查看详情（A2/A3/A4/A5/A6）
-2. 注册新用户并填写地址（A1）
-3. 在详情页选择版本（若有）并加入购物车（A7/D2/D3/D5）
-4. 购物车修改数量/删除（A8/A9/A10）
-5. 结算页自动预填 last address，并下单（A11 + A1 地址覆盖）
-6. 查看订单列表/详情、状态时间线（A12/A13/B4）
-7. pending 状态下取消订单（B2）或 shipped 后确认收货（B2）
-8. 切换语言：UI 文案变化（W1），商品信息按规则切换中/英（W2）
+### 6.6 关系型数据库 ER Diagram
 
-### 6.2 Vendor/Admin 流程（A14~A20 + B1/B2/D*）
-
-1. 管理端商品列表搜索（A14/A15）
-2. 新建商品：填写中英双语 + options（A16/W2/D1）
-3. 为商品创建多个 SKU（不同配置）并设置库存/可售（D4/D5）
-4. 为每个 SKU 上传多张图片（B1/A16）
-5. 上/下架商品（A18）
-6. 管理端查看订单列表/详情并发货/取消（A19/A20/B2/B4）
-
----
-
-## 7. 开发说明
-
-- SQLite 不支持原生 JSON/ENUM：本项目用 `TEXT` 存 JSON 字符串，在应用层解析。
-- 图片上传为本地文件：`backend/app/uploads/sku_{id}/...`，通过 `/uploads/...` 访问。
-
----
-
-## 8. 智能体微服务（agentserver）
-
-### 8.1 目标与边界
-
-新增独立目录 `agentserver/`，作为位于 `frontend` 与 `backend` 之间的智能体微服务，职责如下：
-
-- 通过 DeepSeek 官方 API 实现书籍问答
-- 维护多轮对话上下文
-- 在购物车增删改前生成确认语句，并由前端弹窗二次确认
-- 只开放受控的数据能力：书籍只读查询、购物车增删改
-- 不开放支付、用户敏感信息、admin 权限相关接口
-
-### 8.2 架构设计
+下图给出本项目核心关系型数据模型的 E-R 结构，覆盖用户、地址、分类、商品、SKU、购物车、订单与订单状态时间线等关键实体。
 
 ```text
-Vue Frontend
-  ├─ AgentAssistant.vue 聊天抽屉
-  ├─ ProductDetail.vue 加购确认
-  └─ Cart.vue 改数量/删除确认
-          │
-          ▼
-agentserver (FastAPI, port 8011)
-  ├─ /chat                       多轮对话
-  ├─ /cart/add                   加购确认 + 执行
-  ├─ /cart/update                改数量确认 + 执行
-  ├─ /cart/remove                删除确认 + 执行
-  ├─ /csrf-token                 CSRF token
-  ├─ Skills: book_lookup / cart_guard
-  ├─ DeepSeekService             异步调用 + QPS 限制
-  ├─ ConversationStore           上下文缓存
-  ├─ Repository 白名单           仅 catalog/cart
-  └─ Audit Logger                操作审计
-          │
-          ▼
-SQLite / PostgreSQL
-  ├─ products / product_skus     只读
-  └─ cart_items                  增删改
+┌─────────────────┐        1         n        ┌─────────────────┐
+│      users      │──────────────────────────>│    addresses     │
+├─────────────────┤                           ├─────────────────┤
+│ PK id           │                           │ PK id           │
+│ email           │                           │ FK user_id      │
+│ full_name       │                           │ receiver_name   │
+│ password_hash   │                           │ phone           │
+│ default_addr_id │───────┐                   │ province/city   │
+│ language        │       └──────────────┐    │ district/detail │
+│ is_admin        │                      │    │ is_default      │
+└─────────────────┘                      │    └─────────────────┘
+         │ 1                             │
+         │                               │
+         │ n                             │
+         ▼                               │
+┌─────────────────┐                      │
+│    cart_items    │                      │
+├─────────────────┤                      │
+│ PK id           │                      │
+│ FK user_id      │                      │
+│ FK sku_id       │                      │
+│ quantity        │                      │
+└─────────────────┘                      │
+         │ n                             │
+         │ 1                             │
+         ▼                               │
+┌─────────────────┐        n         1   │    ┌─────────────────┐
+│   product_skus   │<────────────────────┘    │      orders      │
+├─────────────────┤                           ├─────────────────┤
+│ PK id           │                           │ PK order_id      │
+│ FK product_id   │                           │ FK user_id       │
+│ option_values   │                           │ FK address_id    │
+│ stock_quantity  │                           │ ship_* snapshot  │
+│ is_available    │                           │ total_amount     │
+│ photos          │                           │ status           │
+└─────────────────┘                           │ shipped_at/...   │
+         │ n                                  └─────────────────┘
+         │ 1                                           │ 1
+         ▼                                             │ n
+┌─────────────────┐        n         1                 ▼
+│     products     │<──────────────────────┐  ┌──────────────────────┐
+├─────────────────┤                       │  │ order_status_events  │
+│ PK id           │                       │  ├──────────────────────┤
+│ title/title_en  │                       │  │ PK id               │
+│ author/author_en│                       │  │ FK order_id         │
+│ publisher/_en   │                       │  │ status              │
+│ base_price      │                       │  │ note                │
+│ description/_en │                       │  │ created_at          │
+│ FK category_id  │                       │  └──────────────────────┘
+│ options(JSON)   │                       │
+│ is_active       │                       │              1
+└─────────────────┘                       │              │
+         ▲                                │              │ n
+         │ n                              │              ▼
+         │ 1                              │     ┌─────────────────┐
+┌─────────────────┐                       └────>│   order_items     │
+│    categories    │                             ├─────────────────┤
+├─────────────────┤                             │ PK id           │
+│ PK id           │                             │ FK order_id      │
+│ name            │                             │ FK sku_id        │
+│ FK parent_id    │                             │ quantity         │
+│ sort_order      │                             │ unit_price       │
+│ is_active       │                             │ option_values    │
+└─────────────────┘                             └─────────────────┘
 ```
 
-### 8.3 核心安全策略
+#### 6.6.1 ER 图解读
 
-- JWT 复用现有 `backend` 的密钥与 Bearer Token 方案
-- CSRF：通过 `/csrf-token` 下发 token，变更请求要求 `X-CSRF-Token` 与 cookie 双重匹配
-- 输入过滤：拦截 `<script>` / `javascript:` / inline handler 等明显恶意内容
-- 限流：聊天与购物车接口按用户/IP 做滑动窗口限流
-- 模型限频：DeepSeek 调用通过异步 QPS gate 控制每秒请求数
-- 仓储白名单：智能体只调用 `catalog` 与 `cart` repository
-- 审计日志：记录时间、用户 ID、操作类型、SKU/购物车项等关键字段
-- 事务与并发锁：购物车写操作使用事务，且对用户维度操作增加异步锁，降低竞态风险
-- HTTPS：支持 `AGENTSERVER_ENFORCE_HTTPS=true` 时启用重定向与 secure cookie
+- `users` 与 `addresses` 是一对多关系，`default_address_id` 用于记录“上一次地址”；
+- `products` 与 `product_skus` 是一对多关系，用于表达“商品级描述”与“SKU 级配置/库存”的拆分；
+- `cart_items` 以 `sku_id` 为粒度绑定购物车项，因此同一本书不同版本可同时存在；
+- `orders` 与 `order_items` 是一对多关系，订单项保留 SKU 与配置快照；
+- `orders` 与 `order_status_events` 是一对多关系，前者表示当前状态，后者表示完整时间线；
+- `categories` 通过 `parent_id` 支持自关联层级分类。
 
-### 8.4 OpenAPI / Swagger
+#### 6.6.2 设计价值
 
-启动 `agentserver` 后可访问：
+该 E-R 结构支持如下核心业务能力：
 
-- `http://localhost:8011/docs`
-- `http://localhost:8011/openapi.json`
+- 商品多配置、多 SKU、多库存的精细化管理；
+- 购物车与订单对 SKU 维度的准确绑定；
+- 历史订单地址与配置快照可追溯；
+- 状态时间线能够独立于“当前状态”存在，便于展示与审计；
+- 类目、商品、SKU、购物车、订单之间关系清晰，便于后续迁移到更严格的关系型数据库环境。
 
-### 8.5 本地配置
+### 6.7 图片与非结构化数据存储设计
 
-1. 安装依赖
+除关系型数据外，系统还管理图片等非结构化数据。其存储设计如下：
 
-```bat
-cd F:\Online_Bookstore-ING-master\agentserver
-pip install -r requirements.txt
-copy .env.example .env
-```
+- 商品与 SKU 的图片文件保存在 `backend/app/uploads/sku_{id}/` 目录；
+- 数据库中不直接存储图片二进制，而是存储路径或 JSON 结构；
+- 前端通过 `/uploads/...` 静态路径访问图片；
+- seed 过程会将真实书籍封面缓存到本地，以减少重复下载与网络波动带来的不稳定性。
 
-2. 配置 DeepSeek Key（可选但推荐）
+采用“数据库存关系、文件系统存内容”的原因在于：
 
-```env
-DEEPSEEK_API_KEY=sk-xxxx
-DEEPSEEK_MODEL=deepseek-chat
-```
+- 降低数据库体积与备份复杂度；
+- 提高图片替换与调试的便利性；
+- 更符合课程项目本地运行场景。
 
-3. 启动微服务
+---
 
-```bat
-uvicorn app.main:app --reload --port 8011
-```
+## 7. 系统交互模式与 API 设计
 
-4. 前端增加环境变量 `frontend/.env.local`
+### 7.1 交互模式概述
 
-```env
-VITE_AGENT_API_BASE_URL=http://localhost:8011
-```
+系统采用 **REST 风格 API**，不使用 GraphQL。原因如下：
 
-### 8.6 接口说明
+- 业务边界清晰，资源建模较稳定；
+- 课程项目更适合通过路径与方法表达资源操作；
+- 便于前后端联调、Swagger 展示与异常处理说明。
 
-#### `POST /chat`
+交互模式分为两类：
+
+#### 7.1.1 页面驱动交互
+
+前端页面通过主业务后端接口直接进行资源读写，例如：
+
+- `GET /api/products`
+- `GET /api/cart`
+- `POST /api/orders`
+- `GET /api/admin/products`
+
+#### 7.1.2 智能体驱动交互
+
+前端聊天组件通过 `agentserver` 进行自然语言交互，例如：
+
+- `POST /chat`
+- `GET /cart`
+- `POST /cart/add`
+- `PUT /cart/update`
+- `DELETE /cart/remove`
+
+### 7.2 主业务后端接口设计（Backend）
+
+主业务后端遵循资源导向的 REST 风格，主要路径如下：
+
+#### 7.2.1 认证与用户
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/addresses/last`
+
+#### 7.2.2 商品与详情
+
+- `GET /api/products`
+- `GET /api/products/{id}`
+- `GET /api/products/{id}/photos`
+
+#### 7.2.3 购物车与结算
+
+- `GET /api/cart`
+- `POST /api/cart/items`
+- `PUT /api/cart/items/{id}`
+- `DELETE /api/cart/items/{id}`
+- `POST /api/orders`
+
+#### 7.2.4 订单
+
+- `GET /api/orders`
+- `GET /api/orders/{order_id}`
+- `POST /api/orders/{order_id}/cancel`
+- `POST /api/orders/{order_id}/confirm`
+
+#### 7.2.5 管理端
+
+- `GET /api/admin/products`
+- `POST /api/admin/products`
+- `PUT /api/admin/products/{id}`
+- `POST /api/admin/products/{id}/toggle`
+- `GET /api/admin/orders`
+- `GET /api/admin/orders/{order_id}`
+
+### 7.3 智能体接口设计（Agentserver）
+
+智能体接口同样采用 REST 风格，但强调“自然语言驱动 + 受控执行”。
+
+#### 7.3.1 聊天接口
+
+`POST /chat`
 
 请求：
 
 ```json
 {
-  "message": "请介绍一下三体",
-  "conversation_id": "optional-conversation-id"
+  "message": "我想买一本精装的人类简史",
+  "conversation_id": "optional-id"
 }
 ```
 
-返回：
+响应包括：
 
-```json
-{
-  "conversation_id": "f9f2...",
-  "reply": "《三体》作者是刘慈欣，属于科幻小说……",
-  "references": [
-    {
-      "product_id": 10,
-      "sku_ids": [100, 101],
-      "title": "三体",
-      "title_en": "The Three-Body Problem",
-      "author": "刘慈欣",
-      "author_en": "Cixin Liu"
-    }
-  ],
-  "history": []
-}
+- `reply`：面向用户的自然语言回复；
+- `references`：书籍命中结果；
+- `history`：会话历史；
+- `action_suggestion`：若检测到 cart/list/update/remove 等动作，则返回结构化建议。
+
+#### 7.3.2 购物车智能接口
+
+- `GET /cart`：查看当前会话用户购物车；
+- `POST /cart/add`：对当前会话用户购物车发起加购；
+- `PUT /cart/update`：对当前会话用户购物车项更新数量；
+- `DELETE /cart/remove`：删除当前会话用户购物车项；
+- `GET /csrf-token`：获取 CSRF 令牌。
+
+这组接口的特点是：
+
+1. 用户在聊天中表达意图；
+2. `agentserver` 识别动作；
+3. 前端先请求确认语句；
+4. 居中弹窗展示确认/取消；
+5. 用户确认后才真正提交变更请求。
+
+### 7.4 REST 风格约定
+
+系统接口整体遵循以下约定：
+
+- `GET`：只读查询；
+- `POST`：创建资源或触发动作；
+- `PUT`：全量更新/修改数量；
+- `DELETE`：删除资源；
+- 使用 JSON 作为请求与响应格式；
+- 鉴权通过 Bearer Token 完成；
+- 智能体变更接口额外要求 CSRF 令牌。
+
+### 7.5 异常处理流程
+
+系统采用 HTTP 状态码 + JSON 错误信息的方式表达异常。
+
+常见异常包括：
+
+- `400 Bad Request`：参数不合法、库存不足、SKU 不可售；
+- `401 Unauthorized`：未登录或令牌无效；
+- `403 Forbidden`：越权、会话不属于当前用户；
+- `404 Not Found`：资源不存在；
+- `409 Conflict`：并发冲突或确认令牌不匹配；
+- `422 Unprocessable Entity`：输入验证失败；
+- `500 Internal Server Error`：服务内部异常。
+
+异常处理路径：
+
+```text
+前端请求 -> 后端校验 -> 数据库执行/拒绝
+                    │
+                    ├─ 成功：返回业务数据
+                    └─ 失败：返回错误码 + detail
+前端根据错误码展示提示或回滚界面状态
 ```
 
-若数据库无结果，返回：`暂无相关信息`。
+---
 
-#### `POST /cart/add`
+## 8. 状态转移机制设计
 
-第一阶段（生成确认语句）：
+本节对应报告中的 **Dynamic Modelling**，用于说明系统如何随着用户操作、业务事件和后台流程而发生状态变化。与静态数据库设计不同，动态建模关注“事件—状态—响应”的链路。
 
-```json
-{
-  "sku_id": 100,
-  "quantity": 1,
-  "confirmed": false
-}
+### 8.1 核心状态对象
+
+系统中最重要的状态转移机制包含两类：
+
+1. **订单状态流转**；
+2. **智能体购物车操作确认状态流转**。
+
+### 8.2 订单状态机
+
+订单状态定义：
+
+- `pending`
+- `shipped`
+- `completed`
+- `cancelled`
+
+状态图如下：
+
+```text
+           用户下单
+              │
+              ▼
+           pending
+          /       \
+   用户取消/商家取消  商家发货
+        ▼             ▼
+   cancelled       shipped
+                        │
+                  用户确认收货
+                        ▼
+                    completed
 ```
 
-返回：
+自动状态规则：
 
-```json
-{
-  "requires_confirmation": true,
-  "confirmation_message": "确认将《三体》加入购物车吗？",
-  "confirmation_token": "...",
-  "preview": {
-    "sku_id": 100,
-    "product_title": "三体",
-    "quantity": 1
-  }
-}
+- `pending` 超过 3 天未发货，会自动转为 `cancelled`；
+- 每次状态变化都会写入 `order_status_events`；
+- `orders.status` 保存当前状态，`order_status_events` 保存历史轨迹。
+
+### 8.3 订单状态触发事件与处理
+
+| 触发事件 | 原状态 | 新状态 | 处理逻辑 |
+|---|---|---|---|
+| 用户下单 | 无 | pending | 创建订单、写地址快照、清空购物车 |
+| 商家发货 | pending | shipped | 更新状态并写事件 |
+| 用户确认收货 | shipped | completed | 更新状态并写事件 |
+| 用户取消 | pending | cancelled | 更新状态并写事件 |
+| 商家取消 | pending | cancelled | 更新状态并写事件 |
+| 自动超时取消 | pending | cancelled | 扫描超时订单并写事件 |
+
+### 8.4 智能体购物车确认状态机
+
+智能体购物车操作本身也存在一套状态流：
+
+```text
+用户自然语言输入
+      │
+      ▼
+智能体识别动作（add/update/remove/list）
+      │
+      ├─ list  -> 直接读取当前用户购物车并展示
+      │
+      └─ add/update/remove
+              │
+              ▼
+         请求确认语句
+              │
+              ▼
+         前端居中弹窗确认
+           /           \
+        Cancel        Confirm
+          │              │
+          ▼              ▼
+     无数据库变更      执行 cart CRUD
 ```
 
-第二阶段（前端确认后真正提交）：
+该状态机确保：
 
-```json
-{
-  "sku_id": 100,
-  "quantity": 1,
-  "confirmed": true,
-  "confirmation_token": "..."
-}
-```
+- 用户必须手动确认才能执行写操作；
+- 取消时数据库无变动；
+- 动作始终面向当前会话用户；
+- 不允许通过聊天直接越过确认机制。
 
-#### `PUT /cart/update`
+### 8.5 智能体会话状态管理
 
-```json
-{
-  "item_id": 3,
-  "quantity": 2,
-  "confirmed": false
-}
-```
+智能体维护多轮上下文，但对会话做了所有者绑定：
 
-#### `DELETE /cart/remove`
+- 登录态：绑定当前 JWT 用户；
+- 匿名态：绑定当前客户端 IP；
+- 若跨用户复用 `conversation_id`，系统会拒绝访问。
 
-```json
-{
-  "item_id": 3,
-  "confirmed": false
-}
-```
+其目的在于：
 
-说明：三个购物车接口都要求：
+- 保护当前用户数据安全；
+- 避免将上一位用户的上下文误用于当前用户；
+- 保持聊天式交互的连续性。
 
-- `Authorization: Bearer <token>`
-- `X-CSRF-Token: <token>`
-- `Content-Type: application/json`
+---
 
-### 8.7 测试
+## 9. 专题设计说明
 
-微服务提供基础单元/API 测试：
+本节用于补充课程设计中常见的专题性设计工作。并非所有专题都以复杂算法或复杂协议实现，但每一项都从系统设计角度说明当前方案、设计取舍与可扩展方向。
 
-```bat
-cd F:\Online_Bookstore-ING-master\agentserver
-pytest
-```
+### 9.1 Mobile UX 设计
 
-当前测试覆盖：
+虽然项目主要以桌面浏览器演示为主，但前端在移动端仍做了基础优化：
 
-- 书籍问答命中本地数据库
-- 购物车加入流程的“确认 -> 提交”双阶段逻辑
+- 使用 Vue 组件化布局与响应式宽度，避免桌面固定宽度硬编码；
+- 智能体抽屉、确认弹窗、商品详情与图片组件在小屏幕下自动压缩布局；
+- 核心按钮尺寸、确认弹窗字号、输入控件触控面积均适配移动端点击；
+- 购物车与智能体交互强调“先确认再执行”，减少移动端误触风险。
 
-### 8.8 可扩展性设计
+移动端协议设计考虑包括：
 
-- `services/skills.py` 采用 Skill Registry，便于后续增加订单查询、推荐、客服等 agent 技能
-- `repositories/` 与 `services/` 分层，后续可替换为 MCP server、外部工具调用或其他模型
-- `DeepSeekService` 支持降级模式，未配置 API Key 时仍可本地联调
-- 数据接口边界清晰，可将 `agentserver` 拆到其他项目中复用
+- API 仍采用 JSON + REST，减少复杂协议实现成本；
+- 请求结构保持扁平，便于在弱网环境下调试；
+- 对聊天接口与购物车接口分别限流，防止移动端反复点击造成重复提交。
+
+可访问性方面主要使用了以下 Web 标准与实践：
+
+- 语义化按钮与表单输入；
+- 对话框使用显式确认/取消操作；
+- 文案字号较大，特别是购物车确认弹窗强调可读性；
+- 多语言 JSON 使界面文本更容易统一维护。
+
+### 9.2 搜索引擎优化（SEO）设计
+
+由于本项目主要作为本地课程作业运行，SEO 不是核心目标，但仍做了部分有利于索引与内容组织的设计：
+
+- 商品详情页采用稳定的资源路径：`/products/{id}`；
+- 商品列表与搜索页路径结构清晰，便于后续迁移至 SSR/静态预渲染时复用；
+- 商品详情拥有明确书名、作者、简介等结构化内容，利于页面语义表达；
+- 图片 URL 与商品 URL 分离，便于资源管理。
+
+如果后续要增强 SEO，可进一步引入：
+
+- 服务端渲染（SSR）或静态预渲染；
+- `meta title`、`description`、Open Graph 标签；
+- 结构化数据（Schema.org Product / Book）；
+- 更细粒度的分类与标签页 URL 设计。
+
+### 9.3 Web 应用安全设计
+
+系统在安全层面主要考虑“课程项目可实现”与“常见风险可防御”之间的平衡。
+
+#### 9.3.1 认证与授权
+
+- 主业务后端与智能体微服务均基于 Bearer Token / JWT 判断当前用户；
+- 智能体微服务复用主系统的身份信息，不单独管理一套用户体系；
+- admin 能力与普通用户能力严格区分。
+
+#### 9.3.2 常见攻击防护
+
+- 对输入文本做基础过滤，拦截明显脚本注入内容；
+- 对智能体变更接口使用 CSRF 双重校验（Header + Cookie）；
+- 使用受信任 Host、CORS 与安全响应头控制请求来源；
+- 购物车写操作要求确认令牌，减少重放与误触风险；
+- 会话绑定当前用户或匿名 IP，避免 conversation 越权复用。
+
+#### 9.3.3 数据安全与备份
+
+- 图片文件与数据库分离，便于分别备份；
+- seed 脚本支持完整重建和轻量重置，适合本地恢复；
+- 如迁移到生产环境，应补充：
+  - 数据库定期备份；
+  - 日志归档；
+  - 密钥分离存储；
+  - HTTPS 证书与反向代理。
+
+#### 9.3.4 数据加密
+
+当前项目未实现数据库透明加密，而是主要依赖：
+
+- 密码哈希存储；
+- 令牌鉴权；
+- 传输层安全（在支持 HTTPS 时启用）。
+
+若升级为更高安全等级系统，可进一步增加：
+
+- 敏感字段加密；
+- 数据库磁盘加密；
+- KMS/密钥托管方案。
+
+### 9.4 商品推荐设计
+
+系统当前的推荐能力主要有两类：
+
+1. **规则与检索驱动推荐**：基于书名、作者、简介、关键词与主题词做匹配；
+2. **智能体驱动推荐**：由 DeepSeek 理解用户自然语言偏好，再结合本地书库只读结果生成推荐。
+
+推荐使用的数据主要包括：
+
+- 商品标题与英文标题；
+- 作者与出版方；
+- 商品简介；
+- 商品选项与 SKU 可售状态；
+- 当前会话上下文中的用户偏好描述（如“轻松一点”“科幻”“编程相关”）。
+
+算法思想更偏向“可解释的轻量推荐”，而非复杂机器学习模型，原因是：
+
+- 数据量有限，课程项目不适合过度建模；
+- 规则与关键词匹配更便于说明与验收；
+- 智能体可在规则结果基础上生成更自然的推荐表达。
+
+在 UI 设计上，为了促进商品发现，系统提供：
+
+- 商品列表搜索与分页；
+- 商品详情页多图与配置选择；
+- 智能体推荐与对话式探索；
+- 多语言界面以适配不同用户阅读偏好。
+
+### 9.5 报表与分析设计
+
+当前主业务已保留报表扩展入口（如 `Admin - Reports`），从设计上看，报表与分析能力依赖以下数据基础：
+
+- 商品、SKU、订单、订单项、订单状态事件；
+- 订单金额与时间字段；
+- 商品分类关系；
+- 评论、评分等用户反馈数据。
+
+如果进一步实现报表功能，推荐输出的分析维度包括：
+
+- 商品销量排行；
+- SKU 维度销量与库存预警；
+- 订单状态分布；
+- 用户下单频次；
+- 分类销售统计；
+- 评论与评分统计。
+
+在数据库设计上，为加速分析报表，可考虑：
+
+- 给 `orders.created_at`、`orders.status`、`order_items.sku_id` 增加联合索引；
+- 引入日级/周级汇总表；
+- 将订单状态事件表单独用于时间序列统计；
+- 对高频报表建立物化视图或缓存层（若迁移到 PostgreSQL）。
+
+---
+
+## 10. 关键业务规则说明
+
+### 10.1 “只记忆上一次地址”
+
+- 注册时填写的地址作为首次 last address；
+- 结算页预填 `GET /api/addresses/last`；
+- 每次成功下单会覆盖为新的 last address；
+- 历史订单展示依赖订单地址快照，不受后续地址修改影响。
+
+### 10.2 SKU 维度库存与可售状态
+
+- 购物车项绑定到 SKU，而不是 Product；
+- 同一本书不同版本可同时加入购物车；
+- 缺货或不可售 SKU 不允许加购、修改数量与下单；
+- 前端购物车与结算页对不可售项进行红色提示与禁用处理。
+
+### 10.3 智能体购物车安全边界
+
+- 只允许操作当前会话用户购物车；
+- 只允许购物车 CRUD；
+- 不允许支付、订单提交、admin 权限操作；
+- 写操作必须经过确认弹窗；
+- 记录审计日志以便追踪。
+
+---
+
+## 11. 软件质量（Software Quality）
+
+本节从软件验证、安全、用户体验反思和其他非功能质量四个方面，对系统的质量控制策略进行总结。与第 3、6、8、9 章偏设计描述不同，本节更强调“系统质量如何被验证、保障与评估”。
+
+### 11.1 Software Verification
+
+#### 11.1.1 测试组织方式
+
+本项目采用“**自动化测试 + 手动验收 + 调试排错**”结合的方式验证系统正确性。测试执行的组织方式建议如下：
+
+- **后端/接口测试负责人**：负责主业务后端与智能体微服务接口调试、接口回归与异常处理验证；
+- **前端交互测试负责人**：负责页面流程、弹窗、购物车交互、移动端适配与多语言显示测试；
+- **联调与验收负责人**：负责端到端业务路径验证，包括注册、购物车、下单、订单流转和智能体交互。
+
+在项目实现过程中，同时使用：
+
+- **手动测试**：验证页面交互、状态流转、异常提示与智能体体验；
+- **自动化测试**：验证智能体接口、购物车确认-提交流程等可重复逻辑；
+- **调试技术**：使用浏览器开发者工具、后端日志、接口日志与控制台输出来定位问题。
+
+#### 11.1.2 测试类型
+
+系统采用的主要测试类型包括：
+
+1. **调试与排错（Debugging）**
+   - 对前端使用浏览器 Console、Network 面板、Vue 响应式报错信息定位问题；
+   - 对后端使用 Uvicorn 日志、FastAPI 异常栈与 SQLAlchemy 报错信息定位问题；
+   - 对智能体链路增加结构化日志，观察 `action_suggestion`、确认语句与 cart 执行链路是否正确。
+
+2. **单元测试（Unit Tests）**
+   - 主要用于 `agentserver` 中的聊天命中与购物车确认-提交逻辑；
+   - 验证给定请求下是否正确返回结构化响应与数据库变更结果。
+
+3. **集成测试（Integration Tests）**
+   - 验证前端、主业务后端、智能体微服务和数据库之间的交互链路；
+   - 例如：自然语言输入 -> 结构化动作建议 -> 弹窗确认 -> cart CRUD 执行。
+
+4. **验收测试（Acceptance Tests）**
+   - 基于需求编号 A/B/D/W 设计验收流程；
+   - 验证顾客流程、管理员流程、多语言、SKU、订单状态流转和智能体交互是否满足课程要求。
+
+#### 11.1.3 测试用例设计原则
+
+测试用例设计遵循“**需求驱动 + 关键路径优先 + 边界值覆盖**”原则：
+
+- 每个主要需求（如注册、下单、购物车修改、SKU 选择、状态流转）至少对应一组验收用例；
+- 对非平凡功能（如智能体购物车确认、多 SKU 加购、订单时间线、库存校验）重点测试；
+- 对边界值进行覆盖，例如：
+  - 数量为 0 / 1 / 大于库存；
+  - SKU 不可售；
+  - 用户未登录；
+  - conversation 不属于当前用户；
+  - 智能体无法确定书名或版本；
+  - 订单状态非法流转。
+
+#### 11.1.4 需求驱动测试示例
+
+以下示例说明如何基于需求设计测试：
+
+- **A7~A10 购物车 CRUD**：
+  - 正常加购、更新数量、删除；
+  - 不同 SKU 同时存在；
+  - 缺货 SKU 拒绝加购。
+
+- **B2/B4 订单状态流转与时间线**：
+  - `pending -> shipped -> completed`；
+  - `pending -> cancelled`；
+  - 自动超时取消是否写入时间线。
+
+- **D2/D4/D5 SKU 与库存**：
+  - 未选择完整配置不允许匹配 SKU；
+  - 库存不足时报错；
+  - 不可售 SKU 在购物车中做禁用处理。
+
+- **智能体购物车链路**：
+  - 明确购书意图直接触发弹窗；
+  - 取消后数据库无变化；
+  - 确认后数据库写入；
+  - 目标项不明确时要求补充信息。
+
+#### 11.1.5 数据验证与错误检查
+
+系统通过以下方式保证主要功能的数据正确性：
+
+- Pydantic schema 对输入做字段类型与范围校验；
+- 后端在加购、改量、下单时重复校验库存与可售状态；
+- 智能体接口对文本输入做基础恶意内容过滤；
+- 所有 cart 写操作必须带确认令牌，防止误执行；
+- 对会话、JWT、CSRF、用户归属进行多层校验。
+
+#### 11.1.6 样本数据与鲁棒性测试
+
+系统使用 seed 数据作为测试基础，样本数据特点包括：
+
+- 多本真实书籍商品；
+- 部分商品具有多个 SKU（如精装/平装）；
+- 具备图片、简介、作者、双语字段；
+- 包含管理员与普通用户账户；
+- 可生成订单与订单状态事件样本。
+
+通过这些样本数据可以验证：
+
+- 长列表分页与搜索；
+- 多 SKU 库存与购物车行为；
+- 多轮对话命中与推荐；
+- 管理端商品与订单管理能力；
+- 订单状态与时间线展示的正确性。
+
+### 11.2 Security
+
+本节从系统外部视角说明系统如何应对常见安全问题；更细的设计决策与实现细节已在第 `9.3 Web 应用安全设计` 中展开。
+
+#### 11.2.1 已识别的主要风险
+
+系统主要考虑了以下安全风险：
+
+- 未认证访问受限资源；
+- 用户越权访问他人数据；
+- 恶意文本输入造成脚本注入；
+- CSRF 导致购物车变更被伪造；
+- DoS/高频请求导致服务异常；
+- 智能体误操作或越权调用数据库能力；
+- 文件与数据库数据在本地开发中的丢失风险。
+
+#### 11.2.2 已实施的缓解措施
+
+- 使用 JWT / Bearer Token 校验用户身份；
+- conversation 绑定当前用户或当前匿名 IP，防止上下文越权复用；
+- 购物车智能接口使用 CSRF Header + Cookie 双重校验；
+- 对智能体与购物车接口设置滑动窗口限流；
+- 通过仓储白名单限制智能体只能访问商品只读查询与购物车 CRUD；
+- 不开放支付、admin、敏感用户信息接口给智能体；
+- 购物车写操作要求确认弹窗与确认令牌，减少误触与恶意请求。
+
+#### 11.2.3 安全测试与结果
+
+项目在开发阶段主要进行了以下安全相关测试：
+
+- 使用无 JWT 调用智能体 cart 接口，验证返回 401；
+- 使用错误或过期确认令牌，验证请求被拒绝；
+- 伪造会话 ID 跨用户访问，验证返回 403；
+- 输入含脚本特征的文本，验证被过滤或拒绝；
+- 高频重复请求购物车接口，验证限流触发；
+- 人工测试“取消确认后数据库无变化”，验证写操作不会绕过确认机制。
+
+当前未进行大规模压力测试或专业 DoS 测试，但架构上已预留限流与日志机制，可支持后续进一步验证。
+
+### 11.3 Reflection on User Experience
+
+系统的用户体验设计不仅面向熟悉桌面电商系统的普通用户，也考虑到不同年龄层、语言背景和能力差异用户的可用性问题。
+
+#### 11.3.1 年龄与使用经验差异
+
+- 对年轻用户与熟悉电商操作的用户，系统提供搜索、分页、SKU 选择、快捷加购等高效率交互；
+- 对使用经验较少的用户，智能体提供自然语言引导，降低功能理解门槛；
+- 对不熟悉复杂配置的用户，商品详情页通过选项与图片联动帮助理解 SKU 差异。
+
+#### 11.3.2 文化与语言背景差异
+
+- 系统支持 `zh / zh-TW / en / ja` 多语言界面；
+- 商品信息采用中英双语字段，减少语言切换时的信息缺失；
+- 智能体交互页面增加“子页指南”帮助用户规范输入方式；
+- 通过不同语言文案映射，尽量降低不同语言环境下的理解成本。
+
+#### 11.3.3 无障碍与能力差异考虑
+
+系统在可访问性方面的考虑包括：
+
+- 核心按钮与弹窗具有较大的点击区域；
+- 智能体确认弹窗使用更大字号，适合视力较弱用户；
+- 不依赖悬停才能完成关键操作；
+- 对缺货、不可售等状态使用文本与颜色双重提示；
+- 对移动端与桌面端分别优化布局，减少小屏误触。
+
+#### 11.3.4 测试过程中的用户体验反思
+
+在测试与调试过程中，系统暴露出以下典型体验问题，并已逐步改进：
+
+- 仅依赖轻量提示气泡（toast）会导致用户忽略关键信息；
+- 智能体若在聊天中做“二次确认”而非前端弹窗，会造成“说了执行但未执行”的体验混乱；
+- 购物车项若缺少书名/版本提示，用户难以明确操作目标；
+- 移动端若按钮过小或确认信息过短，容易造成误触和误解。
+
+因此，当前设计采用：
+
+- 居中弹窗确认替代短暂提示；
+- 当前会话用户安全边界保证；
+- 指南卡片帮助规范输入；
+- 明确区分聊天回复与真正的数据执行。
+
+### 11.4 Other Qualities
+
+除正确性、安全性与用户体验外，本系统还重点关注以下非功能质量：
+
+#### 11.4.1 可维护性（Maintainability）
+
+之所以重要：课程项目功能多、模块多，若结构混乱，后续修改成本很高。
+
+目标水平：
+
+- 业务边界清晰；
+- 前后端与智能体职责分离；
+- 关键功能模块化；
+- 文档能够支撑后续维护与答辩。
+
+保障手段：
+
+- 分层结构（router / service / repository / schema）；
+- 前端组件与 API 封装分离；
+- README 采用报告式结构；
+- 智能体通过 Skills 与仓储白名单隔离复杂度。
+
+#### 11.4.2 可扩展性（Scalability / Extensibility）
+
+之所以重要：虽然项目本地运行，但功能上已具备继续增加推荐、报表、支付等模块的空间。
+
+目标水平：
+
+- 能够平滑增加新的业务模块；
+- 能够从 SQLite 迁移到 PostgreSQL；
+- 能够为智能体增加更多能力。
+
+保障手段：
+
+- 商品与 SKU 分层建模；
+- 状态事件独立建表；
+- `agentserver` 独立部署；
+- `repositories` 与 `services` 分层便于替换实现。
+
+#### 11.4.3 可解释性（Explainability）
+
+之所以重要：本项目是课程设计，系统不仅要能运行，还要便于讲解。
+
+目标水平：
+
+- 关键状态流、数据流、接口边界可被清楚解释；
+- 设计选择有明确理由；
+- 业务规则能够映射到需求编号。
+
+保障手段：
+
+- README 明确划分架构、数据库、状态机、质量控制等章节；
+- 代码中保留需求追踪标记；
+- 智能体链路采用“识别 -> 确认 -> 执行”的可解释模式。
+
+---
+
+## 12. 手动验收流程（建议）
+
+### 12.1 Customer 流程
+
+1. 未登录访问 `/products`，验证可浏览但不能访问购物车与订单；
+2. 注册用户并填写地址；
+3. 在商品详情选择版本并加入购物车；
+4. 在购物车修改数量、删除项；
+5. 进入结算页并完成下单；
+6. 查看订单列表、订单详情与时间线；
+7. 在 `pending` 阶段取消订单，或在 `shipped` 后确认收货；
+8. 切换语言，观察 UI 与商品信息展示变化；
+9. 通过智能体询问书籍信息与推荐；
+10. 通过智能体执行购物车增删改查并验证确认弹窗。
+
+### 12.2 Vendor/Admin 流程
+
+1. 登录管理员后台；
+2. 管理商品、搜索商品、编辑商品；
+3. 为商品建立多个 SKU 并设置库存/可售；
+4. 为 SKU 上传多张图片；
+5. 上下架商品；
+6. 管理订单并发货/取消；
+7. 验证订单状态流转与时间线是否正确。
+
+---
+
+## 13. 开发说明
+
+- SQLite 不支持原生 JSON/ENUM：本项目用 `TEXT` 存 JSON，在应用层解析；
+- 图片上传为本地文件：`backend/app/uploads/sku_{id}/...`；
+- 智能体微服务采用“Chatbot + Tools”模式：DeepSeek 负责理解与生成，数据库/API 负责受控执行；
+- 若后续需要迁移生产级数据库，建议引入 Alembic + PostgreSQL + 原生 JSONB/索引优化；
+- 若后续需要增强智能体能力，可在 `agentserver/services/skills.py` 中扩展更多技能。
+
+---
+
+## 14. 可扩展性设计
+
+系统在以下几个方面具备良好的扩展基础：
+
+- **业务扩展**：可继续增加优惠券、支付、物流、推荐系统；
+- **数据库扩展**：可迁移至 PostgreSQL，并增加全文索引与审计表；
+- **智能体扩展**：可增加订单查询、售后答疑、评论分析等 Skills；
+- **部署扩展**：当前虽以本地运行设计，但前后端与微服务已具备拆分部署基础；
+- **文档扩展**：当前 README 已具备报告式结构，可直接作为课程报告、系统设计说明书的基础版本。
+
+---
+
+## 15. Conclusion and Further Work
+
+### 15.1 Conclusion
+
+本项目完成了一个面向课程作业场景的在线书店系统设计与实现，形成了从商品浏览、购物车、下单、订单处理到后台管理、国际化展示、智能体交互的完整业务闭环。相较于传统“仅实现基本页面”的课程项目，本系统在以下方面具有较强的完整性与说明价值：
+
+- 在架构层面，形成了前端、主业务后端、智能体微服务三层协同结构；
+- 在数据层面，建立了以 Product + SKU 为核心的关系模型，并支持地址快照、订单状态事件、多语言商品信息等复杂业务；
+- 在动态行为层面，清晰定义了订单状态机、智能体购物车确认状态机以及多轮会话上下文管理机制；
+- 在安全与质量层面，考虑了认证、CSRF、防注入、限流、确认机制、测试与用户体验等因素；
+- 在交互层面，引入了基于 DeepSeek 官方 API 的自然语言智能体，使系统具备更强的可用性、可展示性与扩展性。
+
+整体而言，本项目已经达到“本地可运行、业务可验收、结构可解释、文档可支撑报告”的目标，可作为课程报告、系统设计文档与答辩展示材料的核心基础。
+
+### 15.2 Further Work
+
+尽管当前系统已经实现了核心业务与关键扩展功能，但从工程化和产品化角度看，仍有多项值得继续推进的工作。
+
+#### 15.2.1 功能层面
+
+- 完善支付模块、优惠券、物流跟踪与售后服务；
+- 增加更完整的评论审核、用户画像与收藏功能；
+- 扩展后台报表，支持销量趋势、库存预警、分类分析等可视化能力；
+- 让智能体进一步支持订单查询、售后答疑、评论总结与精细化推荐。
+
+#### 15.2.2 数据与算法层面
+
+- 将 SQLite 迁移到 PostgreSQL，并引入 Alembic 做结构版本管理；
+- 使用原生 `JSONB`、全文索引和联合索引优化查询性能；
+- 为商品增加标签、主题词和推荐特征，提升推荐结果的稳定性与可解释性；
+- 引入更系统的日志分析与行为数据采集，为后续报表与推荐算法提供数据基础。
+
+#### 15.2.3 智能体层面
+
+- 将当前“Chatbot + Tools”模式继续演进为更标准的工具调用智能体架构；
+- 为智能体返回更结构化的意图与候选结果，降低前端消歧成本；
+- 优化 update/remove 对购物车目标项的定位策略，增加候选项选择 UI；
+- 在保证安全前提下，增强智能体对复杂多轮意图的连续处理能力。
+
+#### 15.2.4 质量与工程化层面
+
+- 增加更系统的自动化测试，包括后端 API 回归、前端组件测试和端到端测试；
+- 补充性能测试与压力测试，验证系统在高频请求下的稳定性；
+- 引入 CI/CD 流程、静态检查、格式化与测试门禁；
+- 进一步强化可访问性设计，使系统更好地服务不同年龄、语言和能力背景的用户。
+
+### 15.3 Final Remark
+
+本项目的价值不仅在于“实现了一个在线书店”，更在于通过较完整的设计、建模、状态机、接口、安全与质量控制，展示了一个课程项目如何逐步接近真实软件系统的工程化形态。后续工作可继续围绕“更强的可扩展性、更完善的质量保障、更智能的用户交互”三个方向展开。
