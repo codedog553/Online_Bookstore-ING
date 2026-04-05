@@ -30,6 +30,26 @@
     "adminOrders": "管理 - 注文",
     "adminReports": "管理 - レポート"
   },
+  "agent": {
+    "title": "AI アシスタント",
+    "subtitle": "書籍情報の質問や、カート操作前の確認に対応します。",
+    "placeholder": "例: 『三体』について教えて",
+    "send": "送信",
+    "failed": "アシスタントを利用できません",
+    "empty": "新しい会話を始めてください",
+    "you": "あなた",
+    "assistant": "アシスタント",
+    "newChat": "新しい会話",
+    "confirmTitle": "操作確認",
+    "confirmAction": "確認",
+    "noticeTitle": "アシスタント通知",
+    "cartTitle": "現在のカート",
+    "cartEmpty": "カートは空です",
+    "cartAddSuccess": "現在のユーザーのカートに追加しました",
+    "cartActionSuccess": "カート操作が完了しました",
+    "cartActionCancelled": "今回のカート操作をキャンセルしました",
+    "cartTargetMissing": "どのカート項目を操作するか特定できません。書名または版を明確にしてください。"
+  },
   "auth": {
     "email": "メール",
     "password": "パスワード",

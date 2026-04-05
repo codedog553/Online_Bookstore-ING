@@ -57,6 +57,8 @@
       <router-view />
     </main>
 
+    <AgentAssistant />
+
     <footer class="app-footer">© 2026 {{ t('app.title') }} Demo</footer>
   </div>
 </template>
@@ -66,6 +68,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from './store/auth'
 import { useI18n } from 'vue-i18n'
+import AgentAssistant from './components/AgentAssistant.vue'
 
 // =========================
 // Requirements Traceability

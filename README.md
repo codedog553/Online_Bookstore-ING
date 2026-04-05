@@ -263,3 +263,211 @@ VITE_API_BASE_URL=http://localhost:8000
 
 - SQLite 不支持原生 JSON/ENUM：本项目用 `TEXT` 存 JSON 字符串，在应用层解析。
 - 图片上传为本地文件：`backend/app/uploads/sku_{id}/...`，通过 `/uploads/...` 访问。
+
+---
+
+## 8. 智能体微服务（agentserver）
+
+### 8.1 目标与边界
+
+新增独立目录 `agentserver/`，作为位于 `frontend` 与 `backend` 之间的智能体微服务，职责如下：
+
+- 通过 DeepSeek 官方 API 实现书籍问答
+- 维护多轮对话上下文
+- 在购物车增删改前生成确认语句，并由前端弹窗二次确认
+- 只开放受控的数据能力：书籍只读查询、购物车增删改
+- 不开放支付、用户敏感信息、admin 权限相关接口
+
+### 8.2 架构设计
+
+```text
+Vue Frontend
+  ├─ AgentAssistant.vue 聊天抽屉
+  ├─ ProductDetail.vue 加购确认
+  └─ Cart.vue 改数量/删除确认
+          │
+          ▼
+agentserver (FastAPI, port 8011)
+  ├─ /chat                       多轮对话
+  ├─ /cart/add                   加购确认 + 执行
+  ├─ /cart/update                改数量确认 + 执行
+  ├─ /cart/remove                删除确认 + 执行
+  ├─ /csrf-token                 CSRF token
+  ├─ Skills: book_lookup / cart_guard
+  ├─ DeepSeekService             异步调用 + QPS 限制
+  ├─ ConversationStore           上下文缓存
+  ├─ Repository 白名单           仅 catalog/cart
+  └─ Audit Logger                操作审计
+          │
+          ▼
+SQLite / PostgreSQL
+  ├─ products / product_skus     只读
+  └─ cart_items                  增删改
+```
+
+### 8.3 核心安全策略
+
+- JWT 复用现有 `backend` 的密钥与 Bearer Token 方案
+- CSRF：通过 `/csrf-token` 下发 token，变更请求要求 `X-CSRF-Token` 与 cookie 双重匹配
+- 输入过滤：拦截 `<script>` / `javascript:` / inline handler 等明显恶意内容
+- 限流：聊天与购物车接口按用户/IP 做滑动窗口限流
+- 模型限频：DeepSeek 调用通过异步 QPS gate 控制每秒请求数
+- 仓储白名单：智能体只调用 `catalog` 与 `cart` repository
+- 审计日志：记录时间、用户 ID、操作类型、SKU/购物车项等关键字段
+- 事务与并发锁：购物车写操作使用事务，且对用户维度操作增加异步锁，降低竞态风险
+- HTTPS：支持 `AGENTSERVER_ENFORCE_HTTPS=true` 时启用重定向与 secure cookie
+
+### 8.4 OpenAPI / Swagger
+
+启动 `agentserver` 后可访问：
+
+- `http://localhost:8011/docs`
+- `http://localhost:8011/openapi.json`
+
+### 8.5 本地配置
+
+1. 安装依赖
+
+```bat
+cd F:\Online_Bookstore-ING-master\agentserver
+pip install -r requirements.txt
+copy .env.example .env
+```
+
+2. 配置 DeepSeek Key（可选但推荐）
+
+```env
+DEEPSEEK_API_KEY=sk-xxxx
+DEEPSEEK_MODEL=deepseek-chat
+```
+
+3. 启动微服务
+
+```bat
+uvicorn app.main:app --reload --port 8011
+```
+
+4. 前端增加环境变量 `frontend/.env.local`
+
+```env
+VITE_AGENT_API_BASE_URL=http://localhost:8011
+```
+
+### 8.6 接口说明
+
+#### `POST /chat`
+
+请求：
+
+```json
+{
+  "message": "请介绍一下三体",
+  "conversation_id": "optional-conversation-id"
+}
+```
+
+返回：
+
+```json
+{
+  "conversation_id": "f9f2...",
+  "reply": "《三体》作者是刘慈欣，属于科幻小说……",
+  "references": [
+    {
+      "product_id": 10,
+      "sku_ids": [100, 101],
+      "title": "三体",
+      "title_en": "The Three-Body Problem",
+      "author": "刘慈欣",
+      "author_en": "Cixin Liu"
+    }
+  ],
+  "history": []
+}
+```
+
+若数据库无结果，返回：`暂无相关信息`。
+
+#### `POST /cart/add`
+
+第一阶段（生成确认语句）：
+
+```json
+{
+  "sku_id": 100,
+  "quantity": 1,
+  "confirmed": false
+}
+```
+
+返回：
+
+```json
+{
+  "requires_confirmation": true,
+  "confirmation_message": "确认将《三体》加入购物车吗？",
+  "confirmation_token": "...",
+  "preview": {
+    "sku_id": 100,
+    "product_title": "三体",
+    "quantity": 1
+  }
+}
+```
+
+第二阶段（前端确认后真正提交）：
+
+```json
+{
+  "sku_id": 100,
+  "quantity": 1,
+  "confirmed": true,
+  "confirmation_token": "..."
+}
+```
+
+#### `PUT /cart/update`
+
+```json
+{
+  "item_id": 3,
+  "quantity": 2,
+  "confirmed": false
+}
+```
+
+#### `DELETE /cart/remove`
+
+```json
+{
+  "item_id": 3,
+  "confirmed": false
+}
+```
+
+说明：三个购物车接口都要求：
+
+- `Authorization: Bearer <token>`
+- `X-CSRF-Token: <token>`
+- `Content-Type: application/json`
+
+### 8.7 测试
+
+微服务提供基础单元/API 测试：
+
+```bat
+cd F:\Online_Bookstore-ING-master\agentserver
+pytest
+```
+
+当前测试覆盖：
+
+- 书籍问答命中本地数据库
+- 购物车加入流程的“确认 -> 提交”双阶段逻辑
+
+### 8.8 可扩展性设计
+
+- `services/skills.py` 采用 Skill Registry，便于后续增加订单查询、推荐、客服等 agent 技能
+- `repositories/` 与 `services/` 分层，后续可替换为 MCP server、外部工具调用或其他模型
+- `DeepSeekService` 支持降级模式，未配置 API Key 时仍可本地联调
+- 数据接口边界清晰，可将 `agentserver` 拆到其他项目中复用

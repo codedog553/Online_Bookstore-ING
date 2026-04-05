@@ -30,6 +30,26 @@
     "adminOrders": "後台-訂單",
     "adminReports": "後台-報表"
   },
+  "agent": {
+    "title": "智能助手",
+    "subtitle": "可查詢書籍資訊，並在購物車操作前產生確認語句。",
+    "placeholder": "例如：介紹一下《三體》",
+    "send": "送出",
+    "failed": "助手暫時不可用",
+    "empty": "開始一段新的對話",
+    "you": "我",
+    "assistant": "助手",
+    "newChat": "新對話",
+    "confirmTitle": "操作確認",
+    "confirmAction": "確認",
+    "noticeTitle": "助手提示",
+    "cartTitle": "目前購物車",
+    "cartEmpty": "目前購物車為空",
+    "cartAddSuccess": "已加入目前使用者的購物車",
+    "cartActionSuccess": "購物車操作已完成",
+    "cartActionCancelled": "已取消本次購物車操作",
+    "cartTargetMissing": "我還不能準確定位你要操作的購物車項目，請明確書名或版本後再試。"
+  },
   "auth": {
     "email": "電子郵件",
     "password": "密碼",

@@ -148,9 +148,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../api/http'
+import agentApi, { type AgentConfirmationResponse } from '../api/agent'
 import ProductImageGallery from '../components/ProductImageGallery.vue'
 import { extractErrorMessage } from '../api/error'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { fallbackVersionToEnglish, pickProductText, translateOptionValue } from '../utils/productI18n'
 
@@ -287,9 +288,25 @@ async function addToCart() {
     return
   }
   try {
-    await api.post('/api/cart/items', { sku_id: matchedSku.value.id, quantity: qty.value })
+    const { data: confirmation } = await agentApi.post<AgentConfirmationResponse>('/cart/add', {
+      sku_id: matchedSku.value.id,
+      quantity: qty.value,
+      confirmed: false,
+    })
+    await ElMessageBox.confirm(confirmation.confirmation_message, t('agent.confirmTitle'), {
+      confirmButtonText: t('agent.confirmAction'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    })
+    await agentApi.post('/cart/add', {
+      sku_id: matchedSku.value.id,
+      quantity: qty.value,
+      confirmed: true,
+      confirmation_token: confirmation.confirmation_token,
+    })
     ElMessage.success(t('product.addedToCart'))
   } catch (e:any) {
+    if (e === 'cancel' || e?.message === 'cancel') return
     ElMessage.error(extractErrorMessage(e, t('msg.addToCartFailed')))
   }
 }

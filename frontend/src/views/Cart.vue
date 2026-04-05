@@ -9,7 +9,7 @@
       </el-table-column>
       <el-table-column :label="t('cart.config')" width="180">
         <template #default="{ row }">
-          <span>{{ (rowOptionsForParse = row.product_options || null, parseOption(row.option_values)) }}</span>
+          <span>{{ parseOption(row.option_values, row.product_options || null) }}</span>
         </template>
       </el-table-column>
       <el-table-column :label="t('cart.unitPrice')" width="120">
@@ -50,8 +50,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import api from '../api/http'
+import agentApi, { type AgentConfirmationResponse } from '../api/agent'
 import { extractErrorMessage } from '../api/error'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { formatOptionValues, pickProductText } from '../utils/productI18n'
 
@@ -91,19 +92,14 @@ function displayProductTitle(row: CartItem) {
   return pickProductText(row.product_title, row.product_title_en || undefined, String(locale.value))
 }
 
-function parseOption(s: string){
+function parseOption(s: string, productOptions: string | null){
   // W2: translate option values in non-zh locales
-  return formatOptionValues(s, rowOptionsForParse.value, String(locale.value), (k) => {
+  return formatOptionValues(s, productOptions, String(locale.value), (k) => {
     const key = (k || '').toLowerCase()
     if (key.includes('version') || k === '版本') return t('product.version')
     return k
   })
 }
-
-// Helper: formatOptionValues needs product_options per row.
-// For backward compatibility, we keep parseOption signature and set a reactive ref when rendering.
-import { computed as _computed } from 'vue'
-const rowOptionsForParse = ref<string | null>(null)
 
 async function load(){
   loading.value = true
@@ -117,18 +113,36 @@ async function load(){
 
 async function updateQty(row: CartItem, v:number){
   try {
-    await api.put(`/api/cart/items/${row.id}`, { quantity: row.quantity })
+    const { data: confirmation } = await agentApi.put<AgentConfirmationResponse>('/cart/update', { item_id: row.id, quantity: row.quantity, confirmed: false })
+    await ElMessageBox.confirm(confirmation.confirmation_message, t('agent.confirmTitle'), {
+      confirmButtonText: t('agent.confirmAction'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    })
+    await agentApi.put('/cart/update', { item_id: row.id, quantity: row.quantity, confirmed: true, confirmation_token: confirmation.confirmation_token })
     await load()
   } catch (e:any) {
+    if (e === 'cancel' || e?.message === 'cancel') {
+      await load()
+      return
+    }
     ElMessage.error(extractErrorMessage(e, t('cart.updateFailed')))
+    await load()
   }
 }
 
 async function remove(row: CartItem){
   try {
-    await api.delete(`/api/cart/items/${row.id}`)
+    const { data: confirmation } = await agentApi.delete<AgentConfirmationResponse>('/cart/remove', { data: { item_id: row.id, confirmed: false } })
+    await ElMessageBox.confirm(confirmation.confirmation_message, t('agent.confirmTitle'), {
+      confirmButtonText: t('agent.confirmAction'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+    })
+    await agentApi.delete('/cart/remove', { data: { item_id: row.id, confirmed: true, confirmation_token: confirmation.confirmation_token } })
     await load()
   } catch (e:any) {
+    if (e === 'cancel' || e?.message === 'cancel') return
     ElMessage.error(extractErrorMessage(e, t('cart.removeFailed')))
   }
 }
