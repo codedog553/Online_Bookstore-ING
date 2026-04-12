@@ -63,6 +63,33 @@ class BookLookupSkill:
                 for item in cart.list_items(db, ctx.user_id)
             ]
         action_suggestion = ctx.deepseek.resolve_cart_item_action(message, action_suggestion, cart_payload)
+        # If resolver could not determine target item but we have cart snapshot, expose candidate_items
+        # so frontend can prompt user to choose. Only do this for update/remove actions —
+        # do not inject candidate_items for add actions (add targets catalog skus, not existing cart items).
+        missing = action_suggestion.get("missing_fields") or []
+        action = action_suggestion.get("action")
+        # Only consider existing-cart-item selection for update/remove actions
+        if action in {"update", "remove"} and (action_suggestion.get("item_id") is None or "item_id" in missing):
+            if ctx.user_id is not None and cart_payload:
+                candidate_items = [
+                    {
+                        "item_id": it.get("item_id"),
+                        "sku_id": it.get("sku_id"),
+                        "product_title": it.get("product_title"),
+                        "option_summary": it.get("option_summary"),
+                        "quantity": it.get("quantity"),
+                    }
+                    for it in cart_payload
+                ]
+                # only attach if not already present
+                if not action_suggestion.get("candidate_items"):
+                    action_suggestion["candidate_items"] = candidate_items
+                # ensure missing_fields includes item_id so frontend will prompt selection
+                if "item_id" not in missing:
+                    missing.append("item_id")
+                    action_suggestion["missing_fields"] = missing
+                # prevent auto action when ambiguous
+                action_suggestion["should_act"] = False
         if explicit_purchase_intent and reference_payload and action_suggestion.get("action") == "none":
             first = reference_payload[0]
             sku_requests = action_suggestion.get("sku_requests") or []

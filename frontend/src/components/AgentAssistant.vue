@@ -120,13 +120,107 @@ async function handleSuggestion(data: AgentChatResponse, userMessage: string) {
   )
 
   if (needsManualInfo) {
+    // If backend provided candidate_items, prompt user to choose which cart item
+    if (suggestion.missing_fields?.includes('item_id') && suggestion['candidate_items'] && suggestion['candidate_items'].length) {
+      const candidates = suggestion['candidate_items']
+      let chosen: any = null
+      if (candidates.length === 1) {
+        chosen = candidates[0]
+      } else {
+        const lines = candidates.map((it: any, idx: number) => `${idx + 1}. ${it.product_title}${it.option_summary ? ` (${it.option_summary})` : ''} x ${it.quantity || 1}`).join('\n')
+        try {
+          const result = await ElMessageBox.prompt(`${suggestion.user_message}\n\n${lines}\n\n请输入序号选择要操作的购物车项（例如 1）：`, t('agent.noticeTitle'), {
+            confirmButtonText: t('common.confirm'),
+            cancelButtonText: t('common.cancel'),
+            inputPattern: /^\d+$/,
+            inputErrorMessage: '请输入正确的序号',
+            customClass: 'agent-centered-dialog',
+          })
+          const value = (result as any).value
+          const idx = parseInt(String(value || ''), 10) - 1
+          if (Number.isFinite(idx) && candidates[idx]) chosen = candidates[idx]
+        } catch (e) {
+          return
+        }
+      }
+
+      if (!chosen) return
+
+      // proceed to fetch confirmation from server depending on action
+      try {
+        if (suggestion.action === 'remove') {
+          const { data: confirmation } = await agentApi.delete('/cart/remove', {
+            data: { item_id: chosen.item_id, confirmed: false },
+          })
+          if (suggestion.user_message) {
+            confirmation.confirmation_message = `${suggestion.user_message}\n\n${confirmation.confirmation_message}`
+          }
+          openConfirmationDialog(confirmation, 'delete', '/cart/remove', {
+            item_id: chosen.item_id,
+            confirmed: true,
+            confirmation_token: confirmation.confirmation_token,
+          })
+          return
+        }
+        if (suggestion.action === 'update') {
+          let quantity = suggestion.quantity
+          if (typeof quantity !== 'number') {
+            try {
+              const result = await ElMessageBox.prompt('请输入目标数量（数字）：', t('agent.noticeTitle'), {
+                confirmButtonText: t('common.confirm'),
+                cancelButtonText: t('common.cancel'),
+                inputPattern: /^\d+$/,
+                inputErrorMessage: '请输入正确的数量',
+                customClass: 'agent-centered-dialog',
+              })
+              const value = (result as any).value
+              quantity = parseInt(String(value || ''), 10)
+            } catch (e) {
+              return
+            }
+          }
+          const { data: confirmation } = await agentApi.put('/cart/update', {
+            item_id: chosen.item_id,
+            quantity,
+            confirmed: false,
+          })
+          if (suggestion.user_message) {
+            confirmation.confirmation_message = `${suggestion.user_message}\n\n${confirmation.confirmation_message}`
+          }
+          openConfirmationDialog(confirmation, 'put', '/cart/update', {
+            item_id: chosen.item_id,
+            quantity,
+            confirmed: true,
+            confirmation_token: confirmation.confirmation_token,
+          })
+          return
+        }
+      } catch (e:any) {
+        ElMessage.error(extractErrorMessage(e, t('agent.failed')))
+        return
+      }
+    }
+
+    // fallback: show simple alert if no candidates
+    // If no candidates provided by backend, try resolving from user's cart via API
+    if ((suggestion.action === 'update' || suggestion.action === 'remove') && !suggestion['candidate_items']?.length && suggestion.product_title) {
+      const resolved = await resolveCartItemId(suggestion.product_title, userMessage)
+      if (resolved) {
+        // forward to normal update/remove flow by crafting a minimal suggestion
+        const minimal = Object.assign({}, suggestion, { item_id: resolved })
+        // recursively handle the resolved suggestion
+        await handleSuggestion({ ...data, action_suggestion: minimal } as any, userMessage)
+        return
+      }
+    }
+
     await ElMessageBox.alert(suggestion.user_message, t('agent.noticeTitle'), {
       confirmButtonText: t('common.close'),
       customClass: 'agent-centered-dialog',
     })
     return
   }
-
+    
   if (!suggestion.should_act) return
 
   if (suggestion.action === 'list') {

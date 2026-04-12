@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import logging
 from typing import Any, Dict, List
 
 import httpx
@@ -13,6 +15,7 @@ class DeepSeekService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.qps_gate = AsyncQpsGate(settings.deepseek_qps)
+        self.logger = logging.getLogger(__name__)
 
     @property
     def enabled(self) -> bool:
@@ -238,19 +241,63 @@ class DeepSeekService:
         if not cart_items:
             return suggestion
 
+        def normalize(text: str) -> str:
+            if not text:
+                return ""
+            s = str(text).lower()
+            s = re.sub(r"[\s《》\"'：:（）()\-，。、,．]", "", s)
+            return s
+
         def pick_target() -> Dict[str, Any] | None:
-            hinted_title = str(suggestion.get("product_title") or "")
+            hinted_title = normalize(str(suggestion.get("product_title") or ""))
+            msg_norm = normalize(message)
+            candidates: List[tuple[int, Dict[str, Any]]] = []
             for item in cart_items:
                 title = str(item.get("product_title") or "")
                 option_summary = str(item.get("option_summary") or "")
-                if title and (title in message or (hinted_title and title == hinted_title)):
-                    if "精装" in lowered and "精装" not in option_summary:
-                        continue
-                    if "平装" in lowered and "平装" not in option_summary:
-                        continue
-                    return item
-            if len(cart_items) == 1:
+                title_norm = normalize(title)
+                option_norm = normalize(option_summary)
+                score = 0
+
+                # Exact or hinted match
+                if title_norm and hinted_title and title_norm == hinted_title:
+                    score += 6
+
+                # substring matches
+                if title_norm and title_norm in msg_norm:
+                    score += 8
+                if msg_norm and msg_norm in title_norm:
+                    score += 4
+
+                # option keywords (平装/精装)
+                if "精装" in lowered and "精装" in option_summary:
+                    score += 3
+                if "平装" in lowered and "平装" in option_summary:
+                    score += 3
+
+                # token overlap fallback
+                if title_norm and msg_norm:
+                    # split by non-alphanumeric to get tokens
+                    for token in re.split(r"[^0-9a-zA-Z\u4e00-\u9fff]+", title_norm):
+                        if token and token in msg_norm:
+                            score += 1
+
+                if score > 0:
+                    candidates.append((score, item))
+
+            # if only one cart item, choose it but keep confirmation required
+            if len(cart_items) == 1 and not candidates:
                 return cart_items[0]
+
+            if not candidates:
+                return None
+
+            # sort candidates by score desc
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            # if top candidate much better than next one, pick it
+            if len(candidates) == 1 or (candidates[0][0] >= candidates[1][0] + 3):
+                return candidates[0][1]
+
             return None
 
         target = pick_target()
@@ -270,18 +317,30 @@ class DeepSeekService:
 
         if any(word in lowered for word in ["删除", "移除", "不要了", "去掉"]):
             if not target:
+                    # try to provide candidate items for frontend selection
+                candidate_items = [
+                        {
+                            "item_id": it.get("item_id"),
+                            "sku_id": it.get("sku_id"),
+                            "product_title": it.get("product_title"),
+                            "option_summary": it.get("option_summary"),
+                            "quantity": it.get("quantity"),
+                        }
+                        for it in cart_items
+                    ]
                 return {
-                    "should_act": False,
-                    "action": "none",
-                    "requires_confirmation": False,
-                    "product_title": "",
-                    "sku_id": None,
-                    "sku_requests": [],
-                    "item_id": None,
-                    "quantity": None,
-                    "user_message": "我还不能确定你要删除购物车里的哪一项，请告诉我书名或版本。",
-                    "missing_fields": ["item_id"],
-                }
+                        "should_act": False,
+                        "action": "none",
+                        "requires_confirmation": False,
+                        "product_title": "",
+                        "sku_id": None,
+                        "sku_requests": [],
+                        "item_id": None,
+                        "quantity": None,
+                        "user_message": "我还不能确定你要删除购物车里的哪一项，请从下面候选中选择或告诉我书名/版本。",
+                        "missing_fields": ["item_id"],
+                        "candidate_items": candidate_items,
+                    }
             return {
                 "should_act": True,
                 "action": "remove",
@@ -297,6 +356,16 @@ class DeepSeekService:
 
         if any(word in lowered for word in ["改成", "改为", "改到", "更新", "数量改", "增加", "减少", "加一", "减一", "两本", "2本", "一本", "1本"]):
             if not target:
+                candidate_items = [
+                    {
+                        "item_id": it.get("item_id"),
+                        "sku_id": it.get("sku_id"),
+                        "product_title": it.get("product_title"),
+                        "option_summary": it.get("option_summary"),
+                        "quantity": it.get("quantity"),
+                    }
+                    for it in cart_items
+                ]
                 return {
                     "should_act": False,
                     "action": "none",
@@ -306,8 +375,9 @@ class DeepSeekService:
                     "sku_requests": [],
                     "item_id": None,
                     "quantity": None,
-                    "user_message": "我还不能确定你要修改购物车里的哪一项，请告诉我书名或版本。",
+                    "user_message": "我还不能确定你要修改购物车里的哪一项，请从下面候选中选择或告诉我书名/版本。",
                     "missing_fields": ["item_id"],
+                    "candidate_items": candidate_items,
                 }
 
             quantity = None
@@ -675,7 +745,17 @@ class DeepSeekService:
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         async with httpx.AsyncClient(timeout=self.settings.deepseek_timeout_seconds) as client:
-            response = await client.post(self.settings.deepseek_api_url, headers=headers, json=body)
-            response.raise_for_status()
-            data = response.json()
-            return str(data["choices"][0]["message"]["content"]).strip()
+            try:
+                response = await client.post(self.settings.deepseek_api_url, headers=headers, json=body)
+                response.raise_for_status()
+                data = response.json()
+                return str(data["choices"][0]["message"]["content"]).strip()
+            except httpx.TimeoutException as e:
+                self.logger.exception("DeepSeek request timed out")
+                raise RuntimeError(f"DeepSeek request timed out after {self.settings.deepseek_timeout_seconds}s") from e
+            except httpx.RequestError as e:
+                self.logger.exception("DeepSeek request error")
+                raise RuntimeError("DeepSeek request failed") from e
+            except Exception:
+                self.logger.exception("DeepSeek unknown error")
+                raise

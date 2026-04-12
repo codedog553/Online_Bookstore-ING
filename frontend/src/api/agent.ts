@@ -4,7 +4,7 @@ export const AGENT_API_BASE_URL = (import.meta.env.VITE_AGENT_API_BASE_URL || 'h
 
 const agentApi = axios.create({
   baseURL: AGENT_API_BASE_URL,
-  timeout: 15000,
+  timeout: 40000,
   withCredentials: true,
 })
 
@@ -68,6 +68,13 @@ export interface AgentChatResponse {
     quantity?: number | null
     user_message: string
     missing_fields?: string[]
+      candidate_items?: Array<{
+        item_id?: number | null
+        sku_id?: number | null
+        product_title?: string
+        option_summary?: string | null
+        quantity?: number | null
+      }>
   } | null
 }
 
