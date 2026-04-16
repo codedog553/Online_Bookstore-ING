@@ -57,7 +57,7 @@ def _auto_cancel_expired_orders(db: Session) -> int:
     """
 
     # B2：自动取消以中国大陆时间（UTC+8）为基准判断。
-    expired_before = now_cn_naive() - timedelta(days=3)
+    expired_before = now_cn_naive() - timedelta(minutes=5)
     expired_orders = (
         db.query(models.Order)
         .filter(models.Order.status == "pending")

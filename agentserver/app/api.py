@@ -24,7 +24,7 @@ from .schemas import (
     UpdateCartRequest,
 )
 from .security import issue_confirmation_token, issue_csrf_token, require_user_id, verify_confirmation_token, verify_csrf
-from .services.filters import escape_text, validate_safe_text
+from .services.filters import validate_safe_text
 from .services.skills import SkillContext
 
 
@@ -45,6 +45,14 @@ def _conversation_owner_key(request: Request, user_id: Optional[int]) -> str:
         return f"user:{user_id}"
     client_host = request.client.host if request.client else "unknown"
     return f"anon:{client_host}"
+
+
+def _agent_lang_from_request(request: Request) -> str:
+    raw = request.headers.get("x-user-lang") or request.headers.get("accept-language") or "zh"
+    primary = str(raw).split(",", 1)[0].split(";", 1)[0].strip().lower()
+    if primary.startswith("en") or primary.startswith("ja"):
+        return "en"
+    return "zh"
 
 
 @router.get("/health", response_model=HealthOut, tags=["system"])
@@ -76,6 +84,7 @@ async def csrf_token(request: Request, response: Response):
 async def chat(request: Request, payload: ChatRequest):
     container = _container(request)
     safe_message = validate_safe_text(payload.message)
+    agent_lang = _agent_lang_from_request(request)
     user_id = None
     try:
         user_id = require_user_id(request, container.settings)
@@ -91,15 +100,15 @@ async def chat(request: Request, payload: ChatRequest):
         container.conversations.bind_owner(conversation_id, _conversation_owner_key(request, user_id))
     except PermissionError:
         raise HTTPException(status_code=403, detail="会话不属于当前用户")
-    container.conversations.append(conversation_id, "user", escape_text(safe_message))
+    container.conversations.append(conversation_id, "user", safe_message)
 
     history = [{"role": role, "content": content} for role, content, _ in container.conversations.history(conversation_id)[:-1]]
-    skill_ctx = SkillContext(deepseek=container.deepseek, user_id=user_id)
+    skill_ctx = SkillContext(deepseek=container.deepseek, user_id=user_id, agent_lang=agent_lang)
 
     with container.read_sessionmaker() as db:
         result = await container.skills.book_lookup.run(skill_ctx, db, safe_message, history)
 
-    container.conversations.append(conversation_id, "assistant", escape_text(result["reply"]))
+    container.conversations.append(conversation_id, "assistant", result["reply"])
     history_out = []
     for role, content, created_at in container.conversations.history(conversation_id):
         typed_role: Literal["user", "assistant"] = "assistant" if role == "assistant" else "user"
@@ -140,7 +149,8 @@ async def cart_list(request: Request):
 async def _build_confirmation(request: Request, action: str, product_title: str, quantity: Optional[int], option_summary: Optional[str], token_payload: Dict[str, Any], preview: OperationPreview) -> CartActionResponse:
     container = _container(request)
     user_id = require_user_id(request, container.settings)
-    prompt = await container.skills.cart_guard.run(SkillContext(deepseek=container.deepseek), action, product_title, quantity, option_summary)
+    agent_lang = _agent_lang_from_request(request)
+    prompt = await container.skills.cart_guard.run(SkillContext(deepseek=container.deepseek, user_id=user_id, agent_lang=agent_lang), action, product_title, quantity, option_summary)
     token = issue_confirmation_token(container.settings, user_id, action, token_payload)
     return CartActionResponse(confirmation_message=prompt, confirmation_token=token, preview=preview)
 

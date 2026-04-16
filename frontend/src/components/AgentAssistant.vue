@@ -59,7 +59,7 @@
       </div>
       <template #footer>
         <div class="agent-confirm-actions">
-          <el-button size="large" @click="cancelPendingConfirmation">{{ pendingConfirmation?.ui?.cancel_label || t('common.cancel') }}</el-button>
+          <el-button size="large" @click="cancelPendingConfirmation">{{ pendingConfirmation?.ui?.cancel_label || t('agent.buttonCancel') }}</el-button>
           <el-button size="large" type="primary" @click="confirmPendingAction">{{ pendingConfirmation?.ui?.confirm_label || t('agent.confirmAction') }}</el-button>
         </div>
       </template>
@@ -129,11 +129,12 @@ async function handleSuggestion(data: AgentChatResponse, userMessage: string) {
       } else {
         const lines = candidates.map((it: any, idx: number) => `${idx + 1}. ${it.product_title}${it.option_summary ? ` (${it.option_summary})` : ''} x ${it.quantity || 1}`).join('\n')
         try {
-          const result = await ElMessageBox.prompt(`${suggestion.user_message}\n\n${lines}\n\n请输入序号选择要操作的购物车项（例如 1）：`, t('agent.noticeTitle'), {
-            confirmButtonText: t('common.confirm'),
-            cancelButtonText: t('common.cancel'),
+          const promptText = `${suggestion.user_message}\n\n${lines}\n\n${t('agent.chooseCartItemSuffix')}`
+          const result = await ElMessageBox.prompt(promptText, t('agent.noticeTitle'), {
+            confirmButtonText: t('agent.buttonConfirm'),
+            cancelButtonText: t('agent.buttonCancel'),
             inputPattern: /^\d+$/,
-            inputErrorMessage: '请输入正确的序号',
+            inputErrorMessage: t('agent.inputErrorInvalidIndex'),
             customClass: 'agent-centered-dialog',
           })
           const value = (result as any).value
@@ -166,11 +167,11 @@ async function handleSuggestion(data: AgentChatResponse, userMessage: string) {
           let quantity = suggestion.quantity
           if (typeof quantity !== 'number') {
             try {
-              const result = await ElMessageBox.prompt('请输入目标数量（数字）：', t('agent.noticeTitle'), {
-                confirmButtonText: t('common.confirm'),
-                cancelButtonText: t('common.cancel'),
+              const result = await ElMessageBox.prompt(t('agent.enterQuantityPrompt'), t('agent.noticeTitle'), {
+                confirmButtonText: t('agent.buttonConfirm'),
+                cancelButtonText: t('agent.buttonCancel'),
                 inputPattern: /^\d+$/,
-                inputErrorMessage: '请输入正确的数量',
+                inputErrorMessage: t('agent.inputErrorInvalidQuantity'),
                 customClass: 'agent-centered-dialog',
               })
               const value = (result as any).value
@@ -215,7 +216,7 @@ async function handleSuggestion(data: AgentChatResponse, userMessage: string) {
     }
 
     await ElMessageBox.alert(suggestion.user_message, t('agent.noticeTitle'), {
-      confirmButtonText: t('common.close'),
+      confirmButtonText: t('agent.buttonClose'),
       customClass: 'agent-centered-dialog',
     })
     return
@@ -227,14 +228,14 @@ async function handleSuggestion(data: AgentChatResponse, userMessage: string) {
     const { data: cart } = await agentApi.get<AgentCartListResponse>('/cart')
     if (!cart.items.length) {
       await ElMessageBox.alert(t('agent.cartEmpty'), t('agent.cartTitle'), {
-        confirmButtonText: t('common.close'),
+        confirmButtonText: t('agent.buttonClose'),
         customClass: 'agent-centered-dialog',
       })
       return
     }
     const lines = cart.items.map((item) => `${item.product_title} x ${item.quantity}${item.option_summary ? ` (${item.option_summary})` : ''}`)
     await ElMessageBox.alert(lines.join('\n'), t('agent.cartTitle'), {
-      confirmButtonText: t('common.close'),
+      confirmButtonText: t('agent.buttonClose'),
       customClass: 'agent-centered-dialog',
     })
     return
@@ -282,7 +283,7 @@ async function handleSuggestion(data: AgentChatResponse, userMessage: string) {
     const resolvedItemId = suggestion.item_id ?? await resolveCartItemId(suggestion.product_title, userMessage)
     if (!resolvedItemId) {
       await ElMessageBox.alert(t('agent.cartTargetMissing'), t('agent.noticeTitle'), {
-        confirmButtonText: t('common.close'),
+        confirmButtonText: t('agent.buttonClose'),
         customClass: 'agent-centered-dialog',
       })
       return
@@ -310,7 +311,7 @@ ${confirmation.confirmation_message}`
     const resolvedItemId = suggestion.item_id ?? await resolveCartItemId(suggestion.product_title, userMessage)
     if (!resolvedItemId) {
       await ElMessageBox.alert(t('agent.cartTargetMissing'), t('agent.noticeTitle'), {
-        confirmButtonText: t('common.close'),
+        confirmButtonText: t('agent.buttonClose'),
         customClass: 'agent-centered-dialog',
       })
       return
@@ -359,8 +360,13 @@ async function resolveCartItemId(productTitle: string, userMessage: string): Pro
   const lowered = userMessage.toLowerCase()
   const matchedByOption = matchedByTitle.filter((item) => {
     const option = String(item.option_summary || '')
-    if (lowered.includes('精装')) return option.includes('精装')
-    if (lowered.includes('平装')) return option.includes('平装')
+    const optionLower = option.toLowerCase()
+    if (lowered.includes('精装') || lowered.includes('hardcover')) {
+      return option.includes('精装') || optionLower.includes('hardcover')
+    }
+    if (lowered.includes('平装') || lowered.includes('paperback')) {
+      return option.includes('平装') || optionLower.includes('paperback')
+    }
     return true
   })
 

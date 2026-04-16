@@ -13,21 +13,32 @@ STOPWORDS = {
     "你好", "请", "想要", "我想要", "我想", "给我", "推荐", "介绍", "一下", "一本", "这本", "那本", "有没有",
     "的", "书", "小说", "作品", "帮我", "看看", "找", "查", "查找", "有关", "关于", "什么", "哪些",
     "相关", "方面", "类型", "题材", "一本书", "本书", "学习", "希望", "想学",
+    "please", "recommend", "show", "find", "book", "books", "novel", "novels", "about", "related", "suggest", "want", "looking", "for", "me", "tell", "give", "any", "some",
 }
 
 THEME_ALIASES = {
     "反乌托邦": ["反乌托邦", "极权", "监视", "控制", "压迫", "预言", "社会", "真实", "思想"],
+    "dystopian": ["反乌托邦", "dystopian", "totalitarian", "surveillance", "oppression", "control"],
     "科幻": ["科幻", "未来", "宇宙", "文明", "科技", "太空"],
+    "science fiction": ["科幻", "science fiction", "sci-fi", "future", "space", "civilization", "technology"],
     "推理": ["推理", "侦探", "悬疑", "案件", "谜团"],
+    "mystery": ["推理", "侦探", "悬疑", "案件", "谜团", "mystery", "detective", "suspense", "crime"],
     "爱情": ["爱情", "恋爱", "情感", "婚姻"],
+    "romance": ["爱情", "恋爱", "情感", "婚姻", "romance", "love", "relationship"],
     "历史": ["历史", "帝国", "战争", "王朝", "年代"],
+    "history": ["历史", "帝国", "战争", "王朝", "年代", "history", "empire", "war", "dynasty"],
     "计算机": ["计算机", "编程", "程序", "开发", "算法", "软件", "代码", "python", "java", "数据库", "网络"],
+    "computer": ["计算机", "编程", "程序", "开发", "算法", "软件", "代码", "python", "java", "数据库", "网络", "computer", "programming", "development", "algorithm", "software", "code"],
     "python": ["python", "爬虫", "数据分析", "机器学习", "深度学习", "keras"],
     "编程": ["编程", "程序", "开发", "代码", "算法", "python", "java", "入门", "实践"],
+    "programming": ["编程", "程序", "开发", "代码", "算法", "python", "java", "入门", "实践", "programming", "developer", "coding"],
 }
 
 FOLLOW_UP_OTHER = {"其他", "别的", "别本", "换一本", "还有吗", "除此之外", "除了", "不要这本"}
 FOLLOW_UP_REFER = {"其他", "别的", "还有", "再来", "换一本", "类似", "同类", "这本", "那本", "除此之外", "除了"}
+
+FOLLOW_UP_OTHER.update({"other", "another", "anything else", "different one", "not this one"})
+FOLLOW_UP_REFER.update({"other", "another", "more", "similar", "like this", "besides", "apart from"})
 
 
 def _safe_json_dict(raw: Optional[str]) -> Dict[str, Any]:

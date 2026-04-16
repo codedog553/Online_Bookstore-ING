@@ -2,6 +2,11 @@ import axios from 'axios'
 
 export const AGENT_API_BASE_URL = (import.meta.env.VITE_AGENT_API_BASE_URL || 'http://localhost:8011').replace(/\/$/, '')
 
+function getPlatformLang(): string {
+  const value = String(localStorage.getItem('lang') || '').trim()
+  return value || 'zh'
+}
+
 const agentApi = axios.create({
   baseURL: AGENT_API_BASE_URL,
   timeout: 40000,
@@ -10,10 +15,13 @@ const agentApi = axios.create({
 
 agentApi.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
+  const lang = getPlatformLang()
+  config.headers = config.headers || {}
   if (token) {
-    config.headers = config.headers || {}
     config.headers['Authorization'] = `Bearer ${token}`
   }
+  config.headers['Accept-Language'] = lang
+  config.headers['X-User-Lang'] = lang
   return config
 })
 

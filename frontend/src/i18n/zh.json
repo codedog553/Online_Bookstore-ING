@@ -1,5 +1,6 @@
 {
   "common": {
+    "confirm": "确认",
     "cancel": "取消",
     "close": "关闭"
   },
@@ -42,6 +43,9 @@
     "newChat": "新对话",
     "confirmTitle": "操作确认",
     "confirmAction": "确认",
+    "buttonConfirm": "确认",
+    "buttonCancel": "取消",
+    "buttonClose": "关闭",
     "noticeTitle": "助手提示",
     "guideBadge": "子页指南",
     "guideTitle": "建议按“书名 + 版本 + 操作”描述",
@@ -52,6 +56,10 @@
     "guideExampleAdd": "示例：将《时间简史》精装版加入购物车",
     "guideExampleUpdate": "示例：把购物车里《人类简史》精装版改成 3 本",
     "guideExampleRemove": "示例：删除购物车里《人类简史》的平装版",
+    "chooseCartItemSuffix": "请输入序号选择要操作的购物车项（例如 1）：",
+    "enterQuantityPrompt": "请输入目标数量（数字）：",
+    "inputErrorInvalidIndex": "请输入正确的序号",
+    "inputErrorInvalidQuantity": "请输入正确的数量",
     "cartTitle": "当前购物车",
     "cartEmpty": "当前购物车为空",
     "cartAddSuccess": "已加入当前用户的购物车",
